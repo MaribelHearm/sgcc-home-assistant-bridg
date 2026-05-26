@@ -241,22 +241,27 @@ class DataFetcher:
                 logging.info("无需验证码登录成功 (已被重定向)。\r")
                 return True
 
-            # 处理腾讯点击验证码
-            captcha_passed = solve_captcha_in_browser(driver, max_retries=self.RETRY_TIMES_LIMIT)
-            if captcha_passed:
-                time.sleep(self.RETRY_WAIT_TIME_OFFSET_UNIT)
-                if driver.current_url != LOGIN_URL:
-                    logging.info("通过点击验证码登录成功。\r")
-                    return True
+            # 会出现点击登录直接失败（账号被限制登录）
+            error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
+            if error is None:
+                # 处理腾讯点击验证码
+                captcha_passed = solve_captcha_in_browser(driver, max_retries=self.RETRY_TIMES_LIMIT)
+                if captcha_passed:
+                    time.sleep(self.RETRY_WAIT_TIME_OFFSET_UNIT)
+                    if driver.current_url != LOGIN_URL:
+                        logging.info("通过点击验证码登录成功。\r")
+                        return True
+                    else:
+                        error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
+                        if error:
+                            logging.info(f"验证码通过但登录失败: [{error}]\r")
+                        else:
+                            logging.error("验证码已通过但仍停留在登录页面。")
                 else:
                     error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
-                    if error:
-                        logging.info(f"验证码通过但登录失败: [{error}]\r")
-                    else:
-                        logging.error("验证码已通过但仍停留在登录页面。")
+                    logging.error("点击验证码识别在所有重试后均失败。")
             else:
-                error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
-                logging.error("点击验证码识别在所有重试后均失败。")
+                logging.error(f"登录失败: [{error}]\r")    
         return self._fallback_login(driver, error)
 
     def _get_error_message(self, driver, path) -> Optional[str]:
