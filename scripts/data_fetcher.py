@@ -13,6 +13,7 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 from sensor_updator import SensorUpdator
 from error_watcher import ErrorWatcher
 from typing import Optional
@@ -36,7 +37,8 @@ class DataFetcher:
         self.RETRY_TIMES_LIMIT = int(os.getenv("RETRY_TIMES_LIMIT", 5))
         self.LOGIN_EXPECTED_TIME = int(os.getenv("LOGIN_EXPECTED_TIME", 10))
         self.RETRY_WAIT_TIME_OFFSET_UNIT = int(os.getenv("RETRY_WAIT_TIME_OFFSET_UNIT", 10))
-        self.IGNORE_USER_ID = os.getenv("IGNORE_USER_ID", "xxxxx,xxxxx").split(",")
+        self.IGNORE_USER_ID = [uid.strip() for uid in os.getenv("IGNORE_USER_ID", "").split(",") if uid.strip()]
+        self.PAGE_LOAD_TIMEOUT = int(os.getenv("PAGE_LOAD_TIMEOUT", 45))
         self.QR_CODE_LOGIN_WAIT_COUNT = int(os.getenv("QR_CODE_LOGIN_WAIT_COUNT", 7))
         self.QR_CODE_LOGIN_WAIT_TIME_INTERVAL_UNIT = int(os.getenv("QR_CODE_LOGIN_WAIT_TIME_INTERVAL_UNIT", 10))
         self._user_name_map = {}
@@ -62,6 +64,57 @@ class DataFetcher:
             self.db = None
             logging.info("不使用数据库存储数据。")
 
+    @staticmethod
+    def _mask_secret(value: str, keep_last: int = 2) -> str:
+        if not value:
+            return ""
+        value = str(value)
+        if len(value) <= keep_last:
+            return "*" * len(value)
+        return "*" * (len(value) - keep_last) + value[-keep_last:]
+
+    def _safe_get(self, driver, url: str, label: str = "页面", fast: bool = False):
+        """Navigate with a bounded page-load timeout.
+
+        95598 pages may keep long-polling or hold subresources open. Selenium's
+        default get() waits for full document load and can block the whole fetch
+        job. For post-login SPA pages, use JS navigation and stop loading after
+        the route/DOM becomes observable.
+        """
+        logging.info(f"正在打开{label}: {url}")
+        if fast:
+            old_wait = self.DRIVER_IMPLICITY_WAIT_TIME
+            try:
+                driver.implicitly_wait(0)
+                driver.execute_script("window.location.href = arguments[0];", url)
+                deadline = int(os.getenv("FAST_NAV_WAIT", 20))
+                WebDriverWait(driver, deadline).until(
+                    lambda d: url.split('/osgweb')[-1] in (d.current_url or '')
+                    or (d.execute_script("return document.readyState") in ("interactive", "complete"))
+                )
+            except TimeoutException as e:
+                logging.warning(f"快速打开{label}等待超时，执行 window.stop() 后继续: {e}")
+            except Exception as e:
+                logging.warning(f"快速打开{label}异常，继续使用当前页面: {e}")
+            finally:
+                try:
+                    driver.execute_script("window.stop();")
+                except Exception as stop_error:
+                    logging.warning(f"{label} window.stop() 失败: {stop_error}")
+                driver.implicitly_wait(old_wait)
+            return
+
+        try:
+            driver.get(url)
+        except TimeoutException as e:
+            logging.warning(f"打开{label}超时({self.PAGE_LOAD_TIMEOUT}s)，执行 window.stop() 后继续: {e}")
+            try:
+                driver.execute_script("window.stop();")
+            except Exception as stop_error:
+                logging.warning(f"{label} window.stop() 失败: {stop_error}")
+        except Exception as e:
+            logging.warning(f"打开{label}异常，继续使用当前页面: {e}")
+
     # @staticmethod
     def _click_button(self, driver, button_search_type, button_search_key):
         '''封装点击函数，仅在元素可点击时点击'''
@@ -78,16 +131,11 @@ class DataFetcher:
     def _get_webdriver(self):
         chrome_options = webdriver.ChromeOptions()
 
-        # 基础参数
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--start-maximized")
-
-        # 反检测核心参数（参考 ha-95598）
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
+        # SGCC_REAL_BROWSER=1 + Docker 时是 attach 到 start-real-browser.sh 已启动的持久 Chromium。
+        # 这种模式下 ChromeDriver 只应携带 debuggerAddress；excludeSwitches / prefs 等启动选项
+        # 不能应用到已存在浏览器，会导致 invalid argument: unrecognized chrome option。
+        real_browser = os.getenv("SGCC_REAL_BROWSER", "false").lower() in ("1", "true", "yes", "on")
+        attach_existing_browser = real_browser and ('PYTHON_IN_DOCKER' in os.environ)
 
         # 可选：环境变量自定义反检测参数
         browser_lang = os.getenv("BROWSER_LANGUAGE", "zh-HK,zh,en-US,en")
@@ -95,28 +143,49 @@ class DataFetcher:
         device_scale = os.getenv("BROWSER_DEVICE_SCALE_FACTOR", "2")
         window_size = os.getenv("BROWSER_WINDOW_SIZE", "1158,848")
 
-        chrome_options.add_argument(f"--lang={browser_lang}")
-        chrome_options.add_argument(f"--window-size={window_size}")
-        chrome_options.add_argument(f"--force-device-scale-factor={device_scale}")
-        chrome_options.add_argument("--high-dpi-support=1")
-        if browser_ua:
-            chrome_options.add_argument(f"user-agent={browser_ua}")
+        if not attach_existing_browser:
+            # 基础参数
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--start-maximized")
 
-        chrome_options.add_experimental_option("prefs", {
-            "intl.accept_languages": browser_lang,
-            "credentials_enable_service": False,
-            "profile.password_manager_enabled": False,
-        })
+            # 反检测核心参数（参考 ha-95598）
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option("useAutomationExtension", False)
 
-        # 无头模式（Docker 环境）
+            chrome_options.add_argument(f"--lang={browser_lang}")
+            chrome_options.add_argument(f"--window-size={window_size}")
+            chrome_options.add_argument(f"--force-device-scale-factor={device_scale}")
+            chrome_options.add_argument("--high-dpi-support=1")
+            if browser_ua:
+                chrome_options.add_argument(f"user-agent={browser_ua}")
+
+            chrome_options.add_experimental_option("prefs", {
+                "intl.accept_languages": browser_lang,
+                "credentials_enable_service": False,
+                "profile.password_manager_enabled": False,
+            })
+
+        # Docker 环境默认 headless；SGCC_REAL_BROWSER=1 时连接 start-real-browser.sh 启动的持久 Chromium。
         if 'PYTHON_IN_DOCKER' in os.environ:
-            chrome_options.add_argument("--headless=new")
             chrome_options.binary_location = "/usr/bin/chromium"
             service = ChromeService(executable_path="/usr/bin/chromedriver")
+            if real_browser:
+                debugger_address = os.getenv("BROWSER_CDP_ADDRESS", "127.0.0.1:9222")
+                chrome_options.debugger_address = debugger_address
+                logging.info(f"使用持久真实浏览器会话: {debugger_address}")
+            else:
+                chrome_options.add_argument("--headless=new")
+
             def _setting_driver(driver):
                 # 显式设置窗口大小（解决无头模式下 --window-size 不生效的问题）
                 width, height = map(int, window_size.split(','))
-                driver.set_window_size(width, height)
+                try:
+                    driver.set_window_size(width, height)
+                except Exception as e:
+                    logging.warning(f"设置窗口大小失败: {e}")
                 try:
                     driver.execute_cdp_cmd('Emulation.setDeviceMetricsOverride', {
                         "width": width,
@@ -130,11 +199,17 @@ class DataFetcher:
                 
         else:
             service = self._find_chromedriver()
+            if real_browser:
+                profile_dir = os.getenv("SGCC_BROWSER_PROFILE", os.path.expanduser("~/.local/share/sgcc-electricity-arc/chrome-profile"))
+                os.makedirs(profile_dir, exist_ok=True)
+                chrome_options.add_argument(f"--user-data-dir={profile_dir}")
+                logging.info(f"使用本机持久浏览器 profile: {profile_dir}")
             def _setting_driver(driver):
                 driver.maximize_window()
 
         driver = webdriver.Chrome(options=chrome_options, service=service)
         driver.implicitly_wait(self.DRIVER_IMPLICITY_WAIT_TIME)
+        driver.set_page_load_timeout(self.PAGE_LOAD_TIMEOUT)
         
         _setting_driver(driver)
         
@@ -178,10 +253,38 @@ class DataFetcher:
             "ChromeDriver 未找到。请安装 ChromeDriver 或运行: pip install chromedriver-binary-auto"
         )
 
+    @staticmethod
+    def _is_logged_in_page(driver) -> bool:
+        try:
+            current_url = driver.current_url or ""
+            if "/osgweb/login" not in current_url and "/osgweb/" in current_url:
+                return True
+            return bool(driver.execute_script("""
+                return !!(
+                    document.querySelector('.el-dropdown') ||
+                    document.querySelector('.userName') ||
+                    document.body.innerText.includes('我的') ||
+                    document.body.innerText.includes('安全退出')
+                );
+            """))
+        except Exception:
+            return False
+
     @ErrorWatcher.watch
     def _login(self, driver, phone_code = False):
+        if os.getenv("SGCC_REAL_BROWSER", "false").lower() in ("1", "true", "yes", "on"):
+            try:
+                driver.execute_script("return document.readyState")
+                if self._is_logged_in_page(driver):
+                    logging.info(f"检测到持久浏览器已有登录态: {driver.current_url}")
+                    return True
+            except Exception as e:
+                logging.warning(f"检查持久浏览器登录态失败，将打开登录页: {e}")
         try:
-            driver.get(LOGIN_URL)
+            self._safe_get(driver, LOGIN_URL, "登录页面")
+            if self._is_logged_in_page(driver):
+                logging.info(f"打开登录页后检测到已登录态: {driver.current_url}")
+                return True
             WebDriverWait(driver, self.DRIVER_IMPLICITY_WAIT_TIME * 3).until(EC.visibility_of_element_located((By.CLASS_NAME, "user")))
         except Exception:
             logging.error(f"登录页面加载失败: {LOGIN_URL}")
@@ -211,7 +314,7 @@ class DataFetcher:
             self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[1]/div[1]/div[3]/span')
             input_elements = driver.find_elements(By.CLASS_NAME, "el-input__inner")
             input_elements[2].send_keys(self._username)
-            logging.info(f"已输入用户名: {self._username}\r")
+            logging.info(f"已输入用户名: {self._mask_secret(self._username)}\r")
             self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[1]/div[2]/div[2]/div/a')
             code = input("请输入手机验证码: ")
             input_elements[3].send_keys(code)
@@ -227,9 +330,9 @@ class DataFetcher:
             # 输入用户名和密码
             input_elements = driver.find_elements(By.CLASS_NAME, "el-input__inner")
             input_elements[0].send_keys(self._username)
-            logging.info(f"已输入用户名: {self._username}\r")
+            logging.info(f"已输入用户名: {self._mask_secret(self._username)}\r")
             input_elements[1].send_keys(self._password)
-            logging.info(f"已输入密码: {self._password}\r")
+            logging.info("已输入密码: ***MASKED***\r")
 
             # 点击登录按钮
             self._click_button(driver, By.CLASS_NAME, "el-button.el-button--primary")
@@ -370,7 +473,7 @@ class DataFetcher:
         # self._random_mouse_move(driver)
         logging.info(f"尝试获取用户 ID 列表")
         user_id_list = self._get_user_ids(driver)
-        logging.info(f"共找到 {len(user_id_list)} 个用户 ID，其中 {user_id_list} 将被忽略: {self.IGNORE_USER_ID}")
+        logging.info(f"共找到 {len(user_id_list)} 个用户 ID: {user_id_list}；忽略列表: {self.IGNORE_USER_ID}")
         self._random_delay(0.5, 2)
 
 
@@ -378,7 +481,7 @@ class DataFetcher:
             try:
                 self._random_delay(1, 3)
                 # 切换到电费余额页面
-                driver.get(BALANCE_URL)
+                self._safe_get(driver, BALANCE_URL, "电费余额页面", fast=True)
                 time.sleep(self.RETRY_WAIT_TIME_OFFSET_UNIT)
                 self._choose_current_userid(driver,userid_index)
                 time.sleep(self.RETRY_WAIT_TIME_OFFSET_UNIT)
@@ -506,7 +609,7 @@ class DataFetcher:
                 logging.warning(f"[{user_id}] 增强余额获取失败: {e}")
 
         logging.info(f"[{user_id}] 正在切换到用电量页面...")
-        driver.get(ELECTRIC_USAGE_URL)
+        self._safe_get(driver, ELECTRIC_USAGE_URL, "用电量页面", fast=True)
         time.sleep(self.RETRY_WAIT_TIME_OFFSET_UNIT)
         try:
             self._choose_current_userid(driver, userid_index)
@@ -629,7 +732,7 @@ class DataFetcher:
             try:
                 select_inputs = driver.find_elements(By.CSS_SELECTOR, ".houseNum .el-select .el-input__inner")
                 if not select_inputs:
-                    driver.get(ELECTRIC_USAGE_URL)
+                    self._safe_get(driver, ELECTRIC_USAGE_URL, "用电量页面", fast=True)
                     time.sleep(self.RETRY_WAIT_TIME_OFFSET_UNIT * 2)
                     select_inputs = driver.find_elements(By.CSS_SELECTOR, ".houseNum .el-select .el-input__inner")
 

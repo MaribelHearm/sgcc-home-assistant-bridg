@@ -35,7 +35,7 @@ def main():
 
     try:
         PHONE_NUMBER = os.getenv("PHONE_NUMBER")
-        logging.info(f"读取环境变量 PHONE_NUMBER : {PHONE_NUMBER}")
+        logging.info("读取环境变量 PHONE_NUMBER : ***MASKED***")
         PASSWORD = os.getenv("PASSWORD")
         HASS_URL = os.getenv("HASS_URL")
         JOB_START_TIME = os.getenv("JOB_START_TIME","07:00" )
@@ -62,7 +62,8 @@ def main():
     # 生成随机延迟时间（-10分钟到+10分钟）
     random_delay_minutes = random.randint(-10, 10)
     parsed_time = datetime.strptime(JOB_START_TIME, "%H:%M") + timedelta(minutes=random_delay_minutes)
-    logging.info(f"当前登录用户名为 {PHONE_NUMBER}，Home Assistant 地址为 {HASS_URL}，程序将每天在 {parsed_time.strftime('%H:%M')} 执行。")
+    masked_phone = DataFetcher._mask_secret(PHONE_NUMBER)
+    logging.info(f"当前登录用户名为 {masked_phone}，Home Assistant 地址为 {HASS_URL}，程序将每天在 {parsed_time.strftime('%H:%M')} 执行。")
 
     # 添加随机延迟
     next_run_time = parsed_time + timedelta(hours=12)
