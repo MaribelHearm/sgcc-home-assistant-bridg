@@ -42,6 +42,7 @@ def main():
         LOG_LEVEL = os.getenv("LOG_LEVEL","INFO")
         VERSION = os.getenv("VERSION")
         RETRY_TIMES_LIMIT = int(os.getenv("RETRY_TIMES_LIMIT", 5))
+        REPUBLISH_INTERVAL_MINUTES = int(os.getenv("REPUBLISH_INTERVAL_MINUTES", 15))
 
         logger_init(LOG_LEVEL)
         logging.info(f"当前以Docker镜像方式运行。")
@@ -72,9 +73,9 @@ def main():
     schedule.every().day.at(parsed_time.strftime("%H:%M")).do(safe_scheduled_job, run_task, fetcher, "schedule")
     schedule.every().day.at(next_run_time.strftime("%H:%M")).do(safe_scheduled_job, run_task, fetcher, "schedule")
 
-    # 每5分钟重发一次数据，防止HA重启后数据丢失
+    # 定期重发数据，防止HA重启后数据丢失
     # 如果缓存数据日期与当前日期不一致，则从国家电网重新获取数据
-    schedule.every(5).minutes.do(safe_scheduled_job, republish_or_fetch, updator, fetcher)
+    schedule.every(REPUBLISH_INTERVAL_MINUTES).minutes.do(safe_scheduled_job, republish_or_fetch, updator, fetcher)
 
     # 启动时先尝试从缓存恢复
     # 如果缓存恢复成功，则跳过本次启动时的实时抓取，避免频繁重启导致账号被封
