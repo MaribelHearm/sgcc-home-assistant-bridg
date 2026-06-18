@@ -1,4 +1,5 @@
-FROM 52fewxztg49rsj.xuanyuan.dev/library/python:3.12.11-slim-bookworm AS build
+ARG BASE_IMAGE=python:3.12.11-slim-bookworm
+FROM ${BASE_IMAGE} AS build
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -13,14 +14,14 @@ ENV VERSION=${VERSION}
 ENV PYTHON_IN_DOCKER='PYTHON_IN_DOCKER'
 
 COPY scripts/* /app/
-RUN chmod +x /app/start-real-browser.sh 2>/dev/null || true
+RUN chmod +x /app/docker-entrypoint.sh
 WORKDIR /app
 
 RUN apt-get --allow-releaseinfo-change update \
     && apt-get install -y --no-install-recommends \
         jq fonts-noto-cjk tzdata \
         chromium chromium-driver \
-        xvfb x11vnc fluxbox novnc websockify \
+        xvfb \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
     && dpkg-reconfigure --frontend noninteractive tzdata \
@@ -43,4 +44,4 @@ RUN mkdir /data \
 
 ENV LANG=C.UTF-8
 
-CMD ["python3", "main.py"]
+CMD ["/app/docker-entrypoint.sh"]
