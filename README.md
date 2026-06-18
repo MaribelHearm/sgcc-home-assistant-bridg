@@ -135,17 +135,35 @@ docker compose logs -f sgcc_electricity_app
 
 当 `PUBLISHER=mqtt` 或 `PUBLISHER=both` 且 MQTT broker 可用时，程序会向 `MQTT_DISCOVERY_PREFIX`（默认 `homeassistant`）发布 discovery 配置。Home Assistant 会自动出现一个“国网电费 ****后四位”的 device，并包含余额、欠费、年度/月度/日用电等传感器。
 
-户号会在实体名称、unique id 与日志中脱敏，只保留末四位用于区分。
+户号会在实体名称、unique id 与日志中脱敏，只保留末四位用于区分。Discovery key 会进入 MQTT topic、`unique_id` 和 `object_id`，实际 entity id 由 Home Assistant 根据实体注册表生成；不同 HA 语言、版本或手动改名后可能略有差异，请以 HA 实际显示为准。
+
+实体分三类：
+
+| 类型 | Discovery key | 显示名称示例 | 说明 |
+| --- | --- | --- | --- |
+| 金额汇总 | `balance` / `prepay_balance` / `arrears` | 电费余额 / 预付费余额 / 应交金额 | 当前账户金额状态。 |
+| 最新日数据 | `last_daily_usage` | 最近日用电 | state 是最近一天用电量；属性含 `date`、`valley_kwh`、`flat_kwh`、`peak_kwh`、`tip_kwh`。 |
+| 最新月数据 | `month_usage` / `month_charge` | 月度用电 / 月度电费 | state 是国网页面返回的最新月度用电或电费；属性含月份和起止日期。 |
+| 本月分时汇总 | `month_valley` / `month_flat` / `month_peak` / `month_tip` | 月度谷/平/峰/尖时电量 | 由当前月已抓到的日读数汇总，适合做峰平谷尖概览。 |
+| 年度汇总 | `year_usage` / `year_charge` | 年度用电 / 年度电费 | state 是年度累计用电或电费。 |
+| 历史摘要 | `history` | 历史数据 | state 类似 `2026-06-17 d7 m5`；属性包含 `daily`、`monthly`、年度摘要和数据范围，适合给曲线卡片读取。 |
+| 日历史实体 | `daily_YYYYMMDD` | 日用电 2026-06-17 | 每个日读数一条独立实体；属性含峰平谷尖拆分。 |
+| 月历史实体 | `monthly_YYYYMM` | 月度历史 2026-05 | 每个月度读数一条独立实体；属性含电费和起止日期。 |
+| 年历史实体 | `year_YYYY` | 年度历史 2026 | 年度历史独立实体；属性含年度电费。 |
+
+简单看板建议使用余额、应交金额、`last_daily_usage`、`month_usage`、`month_charge`、`year_usage` 这类“最新值/汇总值”实体；表格或自动化可以直接引用 `daily_YYYYMMDD`、`monthly_YYYYMM`、`year_YYYY` 这类独立历史实体；曲线图建议读取 `history` 实体属性中的 `daily` / `monthly` 数组，这样横轴会按国网页面日期绘制，而不是按 HA 状态更新时间绘制。
 
 ### 5. Lovelace 卡片示例
 
-项目提供了一份 Home Assistant Lovelace 示例卡片：
+项目提供了一份 Home Assistant Lovelace 示例视图：
 
 ```text
 examples/lovelace-sgcc-electricity.yaml
 ```
 
-它包含概览、近日日用电、月度历史、峰平谷尖和年度统计几组卡片。使用时把示例中的 `4840` 替换成你自己的户号末四位，并按 Home Assistant 实际生成的日期/月度实体调整列表。
+它包含概览、近日日用电、月度历史、峰平谷尖和历史曲线几组卡片。使用时把示例中的 `4840` 替换成你自己的户号末四位，并按 Home Assistant 实际生成的日期/月度实体调整列表。
+
+这份文件只是示例，不会自动安装到你的 HA，也不是项目内置自定义卡片。基础概览和表格使用 HA 内置卡片；“历史曲线（可选 ApexCharts）”部分依赖 HACS 的 `apexcharts-card`，如果没有安装可以先删掉曲线部分，或安装后再启用。
 
 
 ## 配置项
