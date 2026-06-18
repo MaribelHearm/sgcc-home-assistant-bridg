@@ -218,6 +218,11 @@ examples/lovelace-sgcc-electricity.yaml
 - 国网页面、腾讯验证码与账号风控策略可能随时变化；如果失败，请优先查看 `/data/errors` 中保存的现场信息。
 - 本项目是国家电网 / 95598 / Home Assistant 用户社区的非官方桥接项目，与国家电网、95598、腾讯验证码和 Home Assistant 官方无隶属关系。
 
+## 社区链接
+
+- LINUX DO 社区：[`linux.do`](https://linux.do)
+- 本项目欢迎在 LINUX DO 以“开源推广”标签交流、反馈和改进；发布推广帖后会在这里补充具体讨论链接。
+
 ## 鸣谢
 
 - 上游项目：[`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new)
