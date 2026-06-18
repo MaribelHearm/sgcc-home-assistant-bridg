@@ -10,7 +10,13 @@ from error_watcher import ErrorWatcher
 from sensor_updator import SensorUpdator
 from datetime import datetime,timedelta
 from const import *
+from config import FetcherConfig
 from data_fetcher import DataFetcher
+from model import AccountData
+from mqtt_publisher import MqttPublisher
+from redact import redact_text
+from store import Store
+
 
 def main():
     global RETRY_TIMES_LIMIT
@@ -57,8 +63,9 @@ def main():
     logging.info(f"开始初始化 ErrorWatcher")
     ErrorWatcher.init(root_dir='/data/errors')
     logging.info(f'ErrorWatcher 初始化完成！')
+    config = FetcherConfig.from_env()
     fetcher = DataFetcher(PHONE_NUMBER, PASSWORD)
-    updator = SensorUpdator()
+    updator = SensorUpdator() if config.PUBLISHER in {"rest", "both"} else None
 
     # 生成随机延迟时间（-10分钟到+10分钟）
     random_delay_minutes = random.randint(-10, 10)
@@ -75,11 +82,11 @@ def main():
 
     # 定期重发数据，防止HA重启后数据丢失
     # 如果缓存数据日期与当前日期不一致，则从国家电网重新获取数据
-    schedule.every(REPUBLISH_INTERVAL_MINUTES).minutes.do(safe_scheduled_job, republish_or_fetch, updator, fetcher)
+    schedule.every(REPUBLISH_INTERVAL_MINUTES).minutes.do(safe_scheduled_job, republish_or_fetch, updator, fetcher, config)
 
     # 启动时先尝试从缓存恢复
     # 如果缓存恢复成功，则跳过本次启动时的实时抓取，避免频繁重启导致账号被封
-    if not updator.republish():
+    if not republish_cached(updator, config):
         logging.info("未找到有效缓存，正在从国家电网获取数据...")
         run_task(fetcher, "startup")
     else:
@@ -94,14 +101,81 @@ def safe_scheduled_job(job_func, *args, **kwargs):
     try:
         return job_func(*args, **kwargs)
     except Exception as e:
-        logging.error(f"定时任务 {getattr(job_func, '__name__', repr(job_func))} 执行失败，已跳过本次并继续调度: {e}")
+        logging.error(f"定时任务 {getattr(job_func, '__name__', repr(job_func))} 执行失败，已跳过本次并继续调度: {redact_text(e)}")
         return None
 
 
-def republish_or_fetch(updator: SensorUpdator, fetcher: DataFetcher):
-    if not updator.republish():
+def republish_or_fetch(updator: SensorUpdator | None, fetcher: DataFetcher, config: FetcherConfig):
+    if not republish_cached(updator, config):
         logging.info("缓存数据已过期或不存在，正在从国家电网获取数据...")
         run_task(fetcher, "schedule")
+
+
+def republish_cached(updator: SensorUpdator | None, config: FetcherConfig) -> bool:
+    """Republish cached data to the configured HA publishers.
+
+    REST uses the legacy SensorUpdator cache path. MQTT Discovery needs the
+    normalized SQLite AccountData, otherwise a restart would not create MQTT
+    discovery entities until the next live SGCC fetch.
+    """
+    publisher = config.PUBLISHER
+    if publisher not in {"rest", "mqtt", "both"}:
+        logging.warning(f"未知 PUBLISHER={publisher}，回退为 both。")
+        publisher = "both"
+
+    rest_ok = True
+    mqtt_ok = True
+    attempted = False
+    if publisher in {"rest", "both"}:
+        attempted = True
+        if updator is None:
+            logging.warning("REST 发布已启用但 SensorUpdator 未初始化。")
+            rest_ok = False
+        else:
+            rest_ok = bool(updator.republish())
+
+    if publisher in {"mqtt", "both"}:
+        attempted = True
+        mqtt_ok = republish_mqtt_from_store(config)
+
+    return attempted and rest_ok and mqtt_ok
+
+
+def republish_mqtt_from_store(config: FetcherConfig) -> bool:
+    try:
+        with Store() as store:
+            account_rows = store.conn.execute(
+                "SELECT account_no FROM accounts ORDER BY account_no"
+            ).fetchall()
+            if not account_rows:
+                logging.info("SQLite Store 中没有账户缓存，跳过 MQTT 重发布。")
+                return False
+            with MqttPublisher(config) as publisher:
+                if not publisher.connected:
+                    return False
+                ok = True
+                published_count = 0
+                for row in account_rows:
+                    account_no = row["account_no"]
+                    account = store.get_account(account_no)
+                    if account is None:
+                        continue
+                    data = AccountData(
+                        account=account,
+                        balance=store.get_latest_balance(account_no),
+                        yearly=(store.get_yearly(account_no, 1) or [None])[0],
+                        monthly=store.get_monthly(account_no, 24),
+                        daily=store.get_daily(account_no, 31),
+                    )
+                    if publisher.publish_account_data(data):
+                        published_count += 1
+                    else:
+                        ok = False
+                logging.info(f"MQTT 已从 SQLite 缓存重发布 {published_count} 个户号。")
+                return ok and published_count > 0
+    except Exception as e:
+        logging.warning(f"MQTT 缓存重发布失败，已忽略: {redact_text(e)}")
+        return False
 
 
 def run_task(data_fetcher: DataFetcher, trigger_type: str = "manual"):
