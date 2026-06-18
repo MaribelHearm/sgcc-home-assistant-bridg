@@ -2,7 +2,7 @@
 
 ## [arc-v0.1.0] - 2026-06-18
 
-第一版 SGCC Electricity ARC 二开发布。
+第一版 SGCC Home Assistant Bridge 二开发布。
 
 ### Added
 
@@ -16,6 +16,6 @@
 ### Changed
 
 - 保留上游 Home Assistant / Docker 部署外壳，重写核心抓取、解析、存储和发布链路。
-- 项目元数据、README、Add-on repository 信息改为 SGCC Electricity ARC。
+- 项目元数据、README、Add-on repository 信息改为 SGCC Home Assistant Bridge。
 
 [arc-v0.1.0]: https://github.com/MaribelHearm/sgcc-electricity-arc/releases/tag/arc-v0.1.0

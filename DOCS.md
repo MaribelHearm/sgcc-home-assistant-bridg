@@ -1,6 +1,6 @@
-# SGCC Electricity ARC Add-on 配置和启动
+# SGCC Home Assistant Bridge Add-on 配置和启动
 
-本项目是基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) 的二开版本，Add-on 仓库地址为：
+本项目是国家电网 / SGCC / 95598 电费与用电数据接入 Home Assistant 的非官方桥接 Add-on，基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) 二开，Add-on 仓库地址为：
 
 ```text
 https://github.com/MaribelHearm/sgcc-electricity-arc

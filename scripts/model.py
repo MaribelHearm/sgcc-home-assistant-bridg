@@ -3,7 +3,7 @@
 scraper/parser 产出这些 dataclass → store 负责持久化。两侧都 import 本模块,
 不得各自另立结构。新增字段需同步:parser 填充、store schema、HA publisher。
 
-字段命名对齐既有 vue_state.py 归一化输出与 ARC 推送的 HA sensor:
+字段命名对齐既有 vue_state.py 归一化输出与 HA sensor:
 - arrears_cny      ← mixinGetYuEdata.historyOwe（欠费/应交）
 - balance_cny      ← 电费账户余额（electricity_charge_balance sensor）
 - prepay_balance_cny ← 预付费余额（prepay_balance sensor）

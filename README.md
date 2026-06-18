@@ -1,15 +1,24 @@
-# SGCC Electricity ARC
+# SGCC Home Assistant Bridge
 
 [![License](https://img.shields.io/github/license/MaribelHearm/sgcc-electricity-arc)](LICENSE)
 [![Release](https://img.shields.io/github/v/tag/MaribelHearm/sgcc-electricity-arc?label=release)](https://github.com/MaribelHearm/sgcc-electricity-arc/tags)
 [![Docker Build Check](https://github.com/MaribelHearm/sgcc-electricity-arc/actions/workflows/docker-image.yml/badge.svg)](https://github.com/MaribelHearm/sgcc-electricity-arc/actions/workflows/docker-image.yml)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-MQTT%20Discovery-41BDF5)](https://www.home-assistant.io/integrations/mqtt/)
 
-把国家电网（95598）的电费、余额与用电量接入 Home Assistant 的非官方本地桥接程序。
+Unofficial State Grid / SGCC / 95598 electricity data bridge for Home Assistant, with browser automation, SQLite storage, MQTT Discovery and REST publishing.
+
+把国家电网（95598）的电费余额、欠费、日用电、月度用电、年度用电和峰平谷尖分时电量接入 Home Assistant 的非官方本地桥接程序。适用于希望在 Home Assistant 能源看板、自动化、仪表盘和长期历史中使用国网用电数据的家庭用户。
 
 本项目基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) 二次开发，原作者为 renhai-lab，原项目采用 Apache-2.0 许可证。感谢原作者和社区为国家电网 Home Assistant 集成方向做出的基础工作。
 
-> 当前版本定位：保留上游 Home Assistant / Docker 部署外壳与既有业务覆盖，在账号登录、验证码处理、Vue 状态取数、SQLite 存储和 HA 发布链路上做工程化重构与增强。
+> 当前版本定位：在上游 Home Assistant / Docker 部署外壳与既有业务覆盖基础上，重构账号登录、验证码处理、浏览器取数、Vue 状态解析、SQLite 存储、MQTT Discovery 和 HA 发布链路。
+
+## 适合谁使用
+
+- 使用 Home Assistant 管理家庭用电、能源统计和自动化的用户。
+- 使用国家电网、网上国网、95598 账号查询电费余额和用电量的用户。
+- 希望通过 MQTT Discovery 自动生成 Home Assistant 传感器，并保留 REST states API 兼容发布的用户。
+- 希望将 SGCC / State Grid 电费、日用电、月度账单、年度统计和分时电量保存到本地 SQLite 的用户。
 
 ## 为什么做这个版本
 
@@ -36,6 +45,8 @@
 
 ## 特性
 
+- **国家电网 / SGCC / 95598 数据接入**：采集电费余额、预付费余额、欠费/应交金额、日用电、月度用电、年度用电和峰/平/谷/尖分时电量。
+- **Home Assistant 能源数据桥接**：通过 MQTT Discovery 自动创建设备与传感器，余额、账单、电量和历史读数可用于 HA 仪表盘、自动化和能源分析。
 - **账号密码主路径加固**：沿用上游账号密码 + LLM 视觉验证码方向，补充登录态判定、受控导航、错误现场保存和二维码 fallback 边界。
 - **有头 Chromium 运行形态**：每轮任务在 Xvfb 下启动有头 Chromium，支持持久 profile、页面/脚本超时控制，抓取完成后释放 driver。
 - **Path B 主路径化**：把上游已有的 Vue state/component data 取数能力整理为 `Scraper` + `Parser` 主链路，读取 SGCC Vue2/Vuex `$store` 与组件 `data` 中的业务数据。
@@ -64,13 +75,15 @@ schedule / startup
 
 主要模块包括：`config`、`redact`、`browser`、`login`、`session`、`scraper`、`parser`、`store`、`model`、`ha_mapping`、`sensor_updator`、`mqtt_publisher`、`captcha_selenium`、`click_captcha_solver`。
 
-## 继承与重构边界
+相关关键词：SGCC、State Grid、国家电网、网上国网、95598、Home Assistant、MQTT Discovery、SQLite、Selenium、Chromium、captcha、LLM、electricity、energy。
+
+## 二开来源与重构范围
 
 本项目继承上游能力，并在以下方向做重构：
 
 - 上游已经支持账号密码登录、LLM 视觉验证码、二维码兜底、Vue state 辅助取数、余额、日/月/年用电、峰平谷尖、REST 传感器和可选 SQLite/MySQL。
-- 本项目的主要价值在于把这些能力拆成更清晰的浏览器、登录、抓取、解析、存储和发布模块。
-- 当前版本新增或显著增强的是：Vue/Vuex Path B 主链路、统一 `AccountData` 模型、规范化 SQLite fact store、MQTT Discovery 发布、启动重发布/缓存恢复、错误现场与脱敏观测。
+- 本项目把这些能力拆成更清晰的浏览器、登录、抓取、解析、存储和发布模块。
+- 当前版本重点增强：Vue/Vuex Path B 主链路、统一 `AccountData` 模型、规范化 SQLite fact store、MQTT Discovery 发布、启动重发布/缓存恢复、错误现场与脱敏观测。
 
 
 ## 快速开始
@@ -164,7 +177,7 @@ docker compose logs -f sgcc_electricity_app
 
 - 已在个人 Home Assistant 场景中完成真实账号抓取验证。
 - 国网页面、腾讯验证码与账号风控策略可能随时变化；如果失败，请优先查看 `/data/errors` 中保存的现场信息。
-- 本项目不是国家电网、95598、腾讯验证码或 Home Assistant 官方项目。
+- 本项目是国家电网 / 95598 / Home Assistant 用户社区的非官方桥接项目，与国家电网、95598、腾讯验证码和 Home Assistant 官方无隶属关系。
 
 ## 鸣谢
 

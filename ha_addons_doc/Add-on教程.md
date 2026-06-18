@@ -1,6 +1,6 @@
-# SGCC Electricity ARC Add-on 安装教程
+# SGCC Home Assistant Bridge Add-on 安装教程
 
-本项目是基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) 的 Apache-2.0 二开版本，当前 Add-on 仓库地址为：
+本项目是国家电网 / SGCC / 95598 电费与用电数据接入 Home Assistant 的非官方桥接 Add-on，基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) Apache-2.0 二开，当前 Add-on 仓库地址为：
 
 ```text
 https://github.com/MaribelHearm/sgcc-electricity-arc
@@ -32,7 +32,7 @@ https://github.com/MaribelHearm/sgcc-electricity-arc
 - 点击右上角的三个点菜单。
 - 选择 “Refresh” 或 “检查更新”。
   ![检查更新](./img/refresh.png)
-- 在列表中找到 “SGCC Electricity ARC”。
+- 在列表中找到 “SGCC Home Assistant Bridge”。
 - 点击 Add-on。
 - 点击 “INSTALL” 或 “安装” 开始安装。
   ![安装Add-on](./img/install-addon.png)
