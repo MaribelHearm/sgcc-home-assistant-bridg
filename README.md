@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/github/license/MaribelHearm/sgcc-home-assistant-bridg)](LICENSE)
 [![Release](https://img.shields.io/github/v/tag/MaribelHearm/sgcc-home-assistant-bridg?label=release)](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/tags)
-[![Docker Build Check](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml/badge.svg)](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml)
+[![CI and Docker Image](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml/badge.svg)](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-MQTT%20Discovery-41BDF5)](https://www.home-assistant.io/integrations/mqtt/)
 
 Unofficial State Grid / SGCC / 95598 electricity data bridge for Home Assistant, with browser automation, SQLite storage, MQTT Discovery and REST publishing.
@@ -112,14 +112,24 @@ $EDITOR .env
 
 ### 3. 构建并启动
 
+默认方式是在本机直接构建并启动：
+
 ```bash
 docker compose build
 docker compose up -d
 ```
 
+也可以使用 GHCR 预构建镜像，把 `docker-compose.yml` 里的 `build` 改成：
+
+```yaml
+image: ghcr.io/maribelhearm/sgcc-home-assistant-bridge:latest
+```
+
+固定版本建议使用 release tag，例如 `ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0`。
+
 默认 compose 会：
 
-- 使用仓库内 `Dockerfile-for-github-action` 本地构建镜像；
+- 使用仓库内 `Dockerfile-for-github-action` 本地构建镜像，或使用你指定的 GHCR 镜像；
 - 读取 `.env`；
 - 使用 host 网络访问 Home Assistant / MQTT broker；
 - 挂载本机 `/data` 到容器 `/data`，SQLite 默认写入 `/data/sgcc.sqlite3`；
