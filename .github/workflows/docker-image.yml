@@ -33,4 +33,4 @@ jobs:
             --platform linux/amd64 \
             --file Dockerfile-for-github-action \
             --load \
-            -t sgcc-electricity-new:ci .
+            -t sgcc-electricity-arc:ci .

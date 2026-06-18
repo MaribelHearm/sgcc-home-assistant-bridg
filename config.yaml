@@ -1,8 +1,8 @@
-name: "SGCC Electricity"
-version: "v1.8.0"
-slug: "sgcc_electricity"
-description: "获取国网电费数据的插件"
-url: "https://github.com/ARC-MX/sgcc_electricity_new"
+name: "SGCC Electricity ARC"
+version: "0.1.0"
+slug: "sgcc_electricity_arc"
+description: "非官方国网电费数据 Home Assistant 桥接插件"
+url: "https://github.com/MaribelHearm/sgcc-electricity-arc"
 arch:
   - aarch64
   - amd64
@@ -10,7 +10,7 @@ host_network: true
 startup: application
 boot: auto
 init: false
-image: "registry.cn-hangzhou.aliyuncs.com/arcw/sgcc_electricity-{arch}"
+image: "ghcr.io/maribelhearm/sgcc-electricity-arc-{arch}"
 map:
   # - addons:rw
   - config:rw
@@ -19,35 +19,51 @@ map:
     read_only: False
 options:
   PHONE_NUMBER: ""
-  PASSWORD: ""  
-  IGNORE_USER_ID: "xxxx,xxxx"
-  ENABLE_DATABASE_STORAGE: false
-  DB_NAME: "homeassistant.db"
-  HASS_URL: "http://homeassistant.local:8123/"
+  PASSWORD: ""
+  IGNORE_USER_ID: ""
+  HASS_URL: "http://homeassistant.local:8123"
   HASS_TOKEN: ""
   JOB_START_TIME: "07:00"
-  RETRY_WAIT_TIME_OFFSET_UNIT: 15
-  DATA_RETENTION_DAYS: 7
-  RECHARGE_NOTIFY: false
-  BALANCE: 5.0
-  PUSHPLUS_TOKEN: "xxxx,xxxx"
+  RETRY_TIMES_LIMIT: 5
+  RETRY_WAIT_TIME_OFFSET_UNIT: 10
+  DRIVER_IMPLICITY_WAIT_TIME: 60
+  PAGE_LOAD_TIMEOUT: 45
   LLM_API_KEY: ""
-  LLM_BASE_URL: ""
-  LLM_MODEL: ""
+  LLM_BASE_URL: "https://ark.cn-beijing.volces.com/api/v3"
+  LLM_MODEL: "doubao-seed-2-0-pro-260215"
+  LOGIN_FALLBACK: "qrcode"
+  PUBLISHER: "both"
+  MQTT_HOST: "127.0.0.1"
+  MQTT_PORT: 1883
+  MQTT_USERNAME: ""
+  MQTT_PASSWORD: ""
+  MQTT_DISCOVERY_PREFIX: "homeassistant"
+  SGCC_DB_PATH: "/data/sgcc.sqlite3"
+  SCRAPER_SETTLE_SECONDS: 3.0
+  REPUBLISH_INTERVAL_MINUTES: 15
+  SGCC_BROWSER_PROFILE: "/data/chrome-profile"
 schema:
   PHONE_NUMBER: str
   PASSWORD: password
   IGNORE_USER_ID: str
-  ENABLE_DATABASE_STORAGE: bool
-  DB_NAME: str
   HASS_URL: url
   HASS_TOKEN: str
   JOB_START_TIME: str
-  RETRY_WAIT_TIME_OFFSET_UNIT: int(2,30)
-  DATA_RETENTION_DAYS: int
-  RECHARGE_NOTIFY: bool 
-  BALANCE: float 
-  PUSHPLUS_TOKEN: str
+  RETRY_TIMES_LIMIT: int(1,20)
+  RETRY_WAIT_TIME_OFFSET_UNIT: int(2,60)
+  DRIVER_IMPLICITY_WAIT_TIME: int(5,180)
+  PAGE_LOAD_TIMEOUT: int(10,180)
   LLM_API_KEY: password
   LLM_BASE_URL: str?
   LLM_MODEL: str?
+  LOGIN_FALLBACK: str?
+  PUBLISHER: str
+  MQTT_HOST: str?
+  MQTT_PORT: port
+  MQTT_USERNAME: str?
+  MQTT_PASSWORD: password
+  MQTT_DISCOVERY_PREFIX: str
+  SGCC_DB_PATH: str
+  SCRAPER_SETTLE_SECONDS: float(0,30)
+  REPUBLISH_INTERVAL_MINUTES: int(1,1440)
+  SGCC_BROWSER_PROFILE: str

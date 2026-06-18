@@ -57,7 +57,7 @@ def main():
         logging.error(f"读取 .env 文件失败，程序将退出，错误信息: {e}。")
         sys.exit()
 
-    logging.info(f"当前仓库版本为 {VERSION}，仓库地址为 https://github.com/ARC-MX/sgcc_electricity_new.git")
+    logging.info(f"当前仓库版本为 {VERSION}，仓库地址为 https://github.com/MaribelHearm/sgcc-electricity-arc")
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logging.info(f"当前日期为 {current_datetime}。")
 

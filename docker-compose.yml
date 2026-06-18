@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-for-github-action
-    container_name: sgcc_electricity
+    container_name: sgcc_electricity_arc
     env_file:
       - .env
     network_mode: host

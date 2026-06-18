@@ -1,17 +1,19 @@
-sgcc_electricity_new
-Copyright 2026 The sgcc_electricity_new contributors
+SGCC Electricity ARC
+Copyright 2026 The SGCC Electricity ARC contributors
 
 This product includes software derived from ARC-MX/sgcc_electricity_new,
 originally authored by renhai-lab and licensed under the Apache License,
 Version 2.0.
 
 Upstream project: https://github.com/ARC-MX/sgcc_electricity_new
+Derived project: https://github.com/MaribelHearm/sgcc-electricity-arc
 
 Major changes in this derived work include:
 - modular refactoring of configuration, redaction, browser, login, session,
   scraper, parser, store, model, Home Assistant mapping and publisher modules;
 - Path B scraping from SGCC Vue2/Vuex store and component data;
-- SQLite local fact store for account data, fetch runs and session checks;
+- SQLite local fact store for account data, fetch runs, session checks and
+  publisher state;
 - multimodal LLM assisted Tencent click-captcha solving with QR-code fallback;
 - per-run headful Chromium/Xvfb browser lifecycle that closes after use;
 - Home Assistant MQTT Discovery publishing with REST compatibility.

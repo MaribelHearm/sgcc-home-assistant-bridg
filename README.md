@@ -1,8 +1,35 @@
-# sgcc_electricity_new
+# SGCC Electricity ARC
 
-把国家电网（95598）的电费、余额与用电量抓取到 Home Assistant 的本地桥接程序。
+[![License](https://img.shields.io/github/license/MaribelHearm/sgcc-electricity-arc)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/MaribelHearm/sgcc-electricity-arc?label=release)](https://github.com/MaribelHearm/sgcc-electricity-arc/tags)
+[![Docker Build Check](https://github.com/MaribelHearm/sgcc-electricity-arc/actions/workflows/docker-image.yml/badge.svg)](https://github.com/MaribelHearm/sgcc-electricity-arc/actions/workflows/docker-image.yml)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-MQTT%20Discovery-41BDF5)](https://www.home-assistant.io/integrations/mqtt/)
+
+把国家电网（95598）的电费、余额与用电量接入 Home Assistant 的非官方本地桥接程序。
 
 本项目基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) 二次开发，原作者为 renhai-lab，原项目采用 Apache-2.0 许可证。感谢原作者和社区为国家电网 Home Assistant 集成方向做出的基础工作。
+
+> 当前版本定位：保留 Home Assistant / Docker 部署外壳，重写核心登录、抓取、解析、SQLite 存储与 MQTT Discovery 发布链路。
+
+## 为什么做这个版本
+
+国网网页与风控变化后，很多旧方案会遇到扫码依赖、验证码误判、会话失效、历史数据不完整或 Home Assistant 实体恢复不稳定的问题。本版本的目标是：
+
+- **无人值守**：优先使用账号密码 + 多模态点选验证码，不把扫码当主路径。
+- **数据不缺**：落库日/月/年、余额、峰平谷尖与抓取运行记录，便于补发和恢复。
+- **HA 原生体验**：通过 MQTT Discovery 自动创建设备和实体，同时保留 REST states API 兼容路径。
+- **本地可观测**：SQLite 作为本地事实源，错误现场保存到本机，账号与户号默认脱敏。
+
+## 和上游项目的主要区别
+
+| 方向 | 上游项目 | 本项目 |
+| --- | --- | --- |
+| 登录路径 | 旧网页登录/扫码/验证码逻辑 | 真实浏览器账号密码登录，多模态点选验证码，二维码仅兜底 |
+| 抓取方式 | 页面文本、旧逻辑与简单扩展 | Path B：读取 SGCC Vue2/Vuex store 与组件数据 |
+| 存储模型 | 可选 SQLite/MySQL，偏每日用电与 key-value | 规范化 SQLite：账户、余额、日/月/年、运行记录、会话检查、发布状态 |
+| HA 发布 | REST 传感器为主 | MQTT Discovery 为主，REST 兼容 |
+| 数据覆盖 | 近日电量与基础字段 | 日用电、月度、年度、余额、峰/平/谷/尖、历史数据摘要 |
+| 运行方式 | 继承原有 Add-on/Docker 结构 | 每轮 headful Chromium + Xvfb，用完即关，减少会话残留 |
 
 ## 特性
 
@@ -102,6 +129,7 @@ docker compose logs -f sgcc_electricity_app
 | `MQTT_USERNAME` | MQTT 用户名，可留空。 |
 | `MQTT_PASSWORD` | MQTT 密码，可留空。 |
 | `MQTT_DISCOVERY_PREFIX` | Home Assistant MQTT Discovery 前缀，默认 `homeassistant`。 |
+| `SGCC_DB_PATH` | SQLite 数据库路径，默认 `/data/sgcc.sqlite3`。 |
 | `SCRAPER_SETTLE_SECONDS` | Path B 抓取等待 Vuex/组件数据稳定的秒数。 |
 | `REPUBLISH_INTERVAL_MINUTES` | 已有数据重发布或补抓的间隔分钟数。 |
 | `SGCC_BROWSER_PROFILE` | Chromium 用户数据目录，默认建议放在 `/data/chrome-profile`。 |
@@ -115,6 +143,12 @@ docker compose logs -f sgcc_electricity_app
 - 程序不会把电费/用电数据发送到 Home Assistant、MQTT broker 与你配置的 LLM 验证码接口之外的目的地。
 - 腾讯点选验证码识别会把验证码截图发送给你配置的 OpenAI 兼容 LLM 服务；请根据所选服务的隐私条款自行评估。
 - 请妥善保护 `.env` 中的国网账号、Home Assistant Token、MQTT 凭据和 LLM API Key。
+
+## 项目状态
+
+- 已在个人 Home Assistant 场景中完成真实账号抓取验证。
+- 国网页面、腾讯验证码与账号风控策略可能随时变化；如果失败，请优先查看 `/data/errors` 中保存的现场信息。
+- 本项目不是国家电网、95598、腾讯验证码或 Home Assistant 官方项目。
 
 ## 鸣谢
 

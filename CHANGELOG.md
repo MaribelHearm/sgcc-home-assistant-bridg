@@ -1,33 +1,21 @@
 # Changelog
 
-## [v1.6.8][v1.6.8] - 2025-07-10
+## [arc-v0.1.0] - 2026-06-18
 
-### 更换默认浏览器
-
-- 更换默认浏览器，减小系统空间
-- 修复v1.6.7出现不能加载网页的情况
-
-## [v1.6.7][v1.6.7] - 2025-07-06
-
-### 添加随机延迟执行
-
-- 默认时间为07:00,19:00 现在改为这个时间随机加减10分钟，避免同时访问....
-
-## [v1.6.4][v1.6.4] - 2025-01-06
-
-### Fixed
-
-- add-on功能优化.
-
-## [v1.6.3][v1.6.3] - 2025-01-05
+第一版 SGCC Electricity ARC 二开发布。
 
 ### Added
 
-- 初步测试了addon功能.
+- 真实浏览器账号密码登录，支持多模态 LLM 点选验证码。
+- Path B 抓取 SGCC Vue2/Vuex store 与组件数据。
+- 规范化 SQLite 本地事实源：账户、余额、日/月/年用电、运行记录、会话检查、发布状态。
+- Home Assistant MQTT Discovery 自动创建设备和实体，并保留 REST states API 兼容发布。
+- 日用电、月度、年度、峰/平/谷/尖分时数据的缓存恢复与重发布。
+- 错误现场保存与日志脱敏。
 
-### Fixed
+### Changed
 
-- 修复了一些小bug.
+- 保留上游 Home Assistant / Docker 部署外壳，重写核心抓取、解析、存储和发布链路。
+- 项目元数据、README、Add-on repository 信息改为 SGCC Electricity ARC。
 
-[v1.6.4]: https://github.com/ARC-MX/sgcc_electricity_new/compare/v1.6.3...v1.6.4
-[v1.6.3]: https://github.com/ARC-MX/sgcc_electricity_new/releases/tag/v1.6.3
+[arc-v0.1.0]: https://github.com/MaribelHearm/sgcc-electricity-arc/releases/tag/arc-v0.1.0
