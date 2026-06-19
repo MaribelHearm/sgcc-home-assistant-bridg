@@ -83,6 +83,12 @@ image: ghcr.io/maribelhearm/sgcc-home-assistant-bridge:latest
 image: ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0
 ```
 
+国内网络访问 GHCR 慢时，可以把 `image:` 换成阿里云 ACR 镜像：
+
+```yaml
+image: crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:latest
+```
+
 查看日志：
 
 ```bash

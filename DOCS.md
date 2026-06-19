@@ -68,6 +68,26 @@ services:
 ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0
 ```
 
+### 国内镜像：阿里云 ACR
+
+国内网络访问 GHCR 慢时，Docker Compose 可以直接换成阿里云 ACR 镜像：
+
+```yaml
+services:
+  sgcc_electricity_app:
+    image: crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:latest
+```
+
+发布 Git tag 后，ACR 会跟随 CI 生成同名版本 tag，例如：
+
+```text
+crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:v0.1.0
+```
+
+本仓库 CI 会同时发布 GHCR 与阿里云 ACR。阿里云 ACR 仓库为公开仓库，普通拉取不需要在项目文档里配置登录密码。
+
+Home Assistant Add-on / App 当前默认仍使用 GHCR 镜像。后续如果需要完整国内 Add-on 安装链路，可以单独维护国内 Add-on 仓库或 `cn` 分支，把 `config.yaml` 的 `image` 指向 ACR。
+
 ### Home Assistant Add-on / App
 
 Home Assistant OS / Supervised 用户可以直接把本仓库作为 Add-on/App 仓库添加：
@@ -235,6 +255,12 @@ examples/lovelace-sgcc-electricity.yaml
 
 ```bash
 docker pull ghcr.io/maribelhearm/sgcc-home-assistant-bridge:latest
+```
+
+国内网络也可以直接拉阿里云 ACR 镜像：
+
+```bash
+docker pull crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:latest
 ```
 
 ## 9. 和上游项目的关系
