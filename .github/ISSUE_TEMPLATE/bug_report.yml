@@ -1,64 +1,125 @@
-name: 向我报告问题，或者你遇到了问题，或者对功能进行请求
-description: 创建问题
+name: Bug 反馈 / 使用问题
+description: 国网登录、验证码、数据抓取、MQTT、Home Assistant 实体等问题
+title: "[Bug] "
 body:
-  - type: textarea
-    validations:
-      required: true
-    id: problem
-    attributes:
-      label: 问题描述
-      description: >-
-        在此描述您遇到的问题，以便与维护者沟通。告诉我们您正在尝试做什么，以及发生了什么。
-        提供一个清晰简洁的问题描述。
   - type: markdown
     attributes:
       value: |
-        ## 环境
-  - type: input
-    id: version
-    validations:
-      required: true
-    attributes:
-      label:  哪个版本存在此问题？
-      description: >
-        Releases发行版
+        感谢反馈。请先确认：日志、截图、配置里不要包含手机号、密码、户号全量、HA Token、LLM API Key、MQTT 密码等敏感信息。
+
   - type: dropdown
+    id: install_method
+    attributes:
+      label: 安装方式
+      options:
+        - Docker Compose / Docker CLI
+        - Home Assistant Add-on
+        - Home Assistant Container 外部容器
+        - 其他
     validations:
       required: true
-    id: selfTest
-    attributes:
-      label: 您是否手动登录国家电网网页并尝试获取数据？
-      options:
-        - 未尝试手动获取数据
-        - 手动登录不成功
-        - 已经手动登录国网并且可以正常获取数据
-  - type: dropdown
-    validations:
-      required: true
-    id: installation
-    attributes:
-      label: 您使用的是哪种安装方式？
-      options:
-        - Windows Docker环境
-        - Linxu Docker环境
-        - 群晖Docker环境
-        - 其他环境请在附加信息说明
+
   - type: input
+    id: project_version
+    attributes:
+      label: 项目版本 / 镜像 tag
+      description: 例如 latest、main、sha-xxxxxxx、v0.1.1；如果不确定，请贴启动日志里的版本行。
+      placeholder: latest
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant 版本与安装方式
+      placeholder: Core 2026.6.3 / HAOS 18.0 / Container 等
     validations:
       required: false
+
+  - type: dropdown
+    id: problem_type
     attributes:
-      label: Home Assistant core 哪个版本，安装方式，
-      description: >
-        Home Assistant 的版本，如 2021.8。 安装方式Hassos Docker 
+      label: 问题类型
+      options:
+        - 国网登录失败
+        - 验证码 / LLM 识别失败
+        - RK001 / 风控 / 页面打不开
+        - 数据缺失或数据不更新
+        - MQTT Discovery / HA 实体问题
+        - Home Assistant Add-on 安装或启动问题
+        - Docker 镜像 / 国内镜像问题
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: publisher
+    attributes:
+      label: PUBLISHER 配置
+      options:
+        - both
+        - mqtt
+        - rest
+        - 不确定 / 未配置
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望发生什么？
+      description: 简单说你想看到的结果。
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际发生了什么？
+      description: 包括页面、实体、日志里的关键现象。请脱敏。
+    validations:
+      required: true
+
+  - type: textarea
+    id: data_scope
+    attributes:
+      label: 数据范围情况
+      description: 如果是数据缺失，请说明余额、日用电、月度、年度、峰平谷尖分别是否有数据；日/月数据最新到哪一天/哪一月。
+      placeholder: |
+        余额：有/无
+        日用电：最新到 2026-xx-xx
+        月度：最新到 2026-xx
+        年度：有/无
+        峰平谷尖：有/无
+    validations:
+      required: false
+
   - type: textarea
     id: logs
     attributes:
-      label: 日志中是否有任何可能对我们有用的信息？
-      description: 例如，docker logs -f <容器ID>
+      label: 相关日志
+      description: 请贴关键日志，不要贴密钥和完整账号。Docker 可用 docker logs <容器名>；Add-on 可在 HA Supervisor 日志页复制。
+      render: text
+    validations:
+      required: false
+
   - type: textarea
-    id: additional
+    id: config
     attributes:
-      label: 附加信息
-      description: >
-        如果您有任何附加信息提供给我们，请在下面的字段中填写。
-        请注意，您可以通过拖放文件在下面的字段中附加截图或屏幕录制。
+      label: 脱敏后的关键配置
+      description: 例如 LOGIN_FALLBACK、LLM_BASE_URL、LLM_MODEL、MQTT_HOST、MQTT_DISCOVERY_PREFIX、JOB_START_TIME。不要贴密码/token/key。
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经确认日志和截图中没有手机号、密码、户号全量、token、API Key、MQTT 密码等敏感信息。
+          required: true
+        - label: 如果是国网数据问题，我已经确认手动登录 95598/网上国网页面时能看到对应数据。
+          required: false
+        - label: 如果是 HA 实体问题，我已经尝试等待一次缓存重发布或重启 HA 后观察 retained MQTT 实体。
+          required: false

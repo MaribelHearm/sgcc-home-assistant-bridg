@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: README / 使用文档
+    url: https://github.com/MaribelHearm/sgcc-home-assistant-bridg#readme
+    about: 提交问题前建议先看 README 与 DOCS。
+  - name: LINUX DO 推广帖
+    url: https://linux.do/t/topic/2431381
+    about: 适合交流使用体验、截图和非 bug 讨论。

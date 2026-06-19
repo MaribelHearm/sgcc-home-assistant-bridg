@@ -1,0 +1,42 @@
+name: 功能建议
+description: 新数据维度、部署方式、Dashboard、Add-on、文档教程等建议
+title: "[Feature] "
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景
+      description: 你想解决什么实际问题？
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案
+      description: 你希望项目怎么支持？如果有类似项目或截图也可以贴。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关方向
+      options:
+        - 数据抓取 / 数据维度
+        - Home Assistant 实体 / Dashboard
+        - MQTT / Discovery
+        - Home Assistant Add-on
+        - Docker / 国内镜像
+        - 文档 / 教程
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 可选。
+    validations:
+      required: false
