@@ -12,6 +12,9 @@ on:
       - 'Dockerfile-for-github-action'
       - 'requirements.txt'
       - 'example.env'
+      - 'config.yaml'
+      - 'repository.yaml'
+      - 'ha_addons_doc/**'
       - '.github/workflows/docker-image.yml'
   pull_request:
     paths:
@@ -20,6 +23,9 @@ on:
       - 'Dockerfile-for-github-action'
       - 'requirements.txt'
       - 'example.env'
+      - 'config.yaml'
+      - 'repository.yaml'
+      - 'ha_addons_doc/**'
       - '.github/workflows/docker-image.yml'
   workflow_dispatch:
 

@@ -1,16 +1,17 @@
 name: "SGCC Home Assistant Bridge"
-version: "0.1.0"
-slug: "sgcc_electricity_arc"
+version: "v0.1.0"
+slug: "sgcc_home_assistant_bridge"
 description: "国家电网 / SGCC / 95598 电费与用电数据 Home Assistant 桥接插件"
-url: "https://github.com/MaribelHearm/sgcc-electricity-arc"
+url: "https://github.com/MaribelHearm/sgcc-home-assistant-bridg"
 arch:
-  - aarch64
   - amd64
 host_network: true
 startup: application
 boot: auto
 init: false
-image: "ghcr.io/maribelhearm/sgcc-electricity-arc-{arch}"
+stage: experimental
+legacy: true
+image: "ghcr.io/maribelhearm/sgcc-home-assistant-bridge"
 map:
   # - addons:rw
   - config:rw

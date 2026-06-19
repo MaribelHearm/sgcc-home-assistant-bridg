@@ -18,7 +18,7 @@
 - 用 SQLite 保存本地事实库，便于重发布和排障。
 - 通过 MQTT Discovery 在 Home Assistant 自动生成设备和实体。
 - 保留 REST states API 兼容发布。
-- 支持 Docker Compose 和 GHCR 预构建镜像。
+- 支持 Docker Compose、GHCR 预构建镜像和 Home Assistant OS/Supervised Add-on。
 - LLM 验证码调用保持 OpenAI 兼容接口，也兼容火山方舟 / 豆包 `ARK_*` 配置写法。
 
 ## 5 分钟快速开始
@@ -88,6 +88,14 @@ image: ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0
 ```bash
 docker compose logs -f sgcc_electricity_app
 ```
+
+Home Assistant OS / Supervised 也可以直接添加 Add-on/App 仓库：
+
+```text
+https://github.com/MaribelHearm/sgcc-home-assistant-bridg
+```
+
+当前 Add-on 预构建镜像先支持 `amd64`。详细步骤见 [Add-on 安装教程](ha_addons_doc/Add-on教程.md)。
 
 ### 4. 去 Home Assistant 看实体
 

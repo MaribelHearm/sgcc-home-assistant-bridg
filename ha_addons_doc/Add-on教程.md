@@ -1,10 +1,12 @@
 # SGCC Home Assistant Bridge Add-on 安装教程
 
-本项目是国家电网 / SGCC / 95598 电费与用电数据接入 Home Assistant 的非官方桥接 Add-on，基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) Apache-2.0 二开，当前 Add-on 仓库地址为：
+本项目是国家电网 / SGCC / 95598 电费与用电数据接入 Home Assistant 的非官方桥接 Add-on/App，基于 [`ARC-MX/sgcc_electricity_new`](https://github.com/ARC-MX/sgcc_electricity_new) Apache-2.0 二开，当前 Add-on 仓库地址为：
 
 ```text
 https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 ```
+
+当前预构建镜像先支持 `amd64`。如果你使用的是 aarch64/arm64 主机，请等多架构镜像发布后再安装。
 
 ## 安装步骤
 

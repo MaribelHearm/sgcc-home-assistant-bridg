@@ -68,15 +68,28 @@ services:
 ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0
 ```
 
-### Home Assistant Add-on 配置
+### Home Assistant Add-on / App
 
-如果使用 Add-on 形式：
+Home Assistant OS / Supervised 用户可以直接把本仓库作为 Add-on/App 仓库添加：
 
+```text
+https://github.com/MaribelHearm/sgcc-home-assistant-bridg
+```
+
+安装入口：设置 → Add-ons/Apps → Add-on Store → 右上角 Repositories → 添加上面的仓库地址 → 刷新。
+
+说明：
+
+- 当前预构建镜像只发布 `amd64`，所以 `config.yaml` 也先只声明 `amd64`。
+- `config.yaml` 的 `version` 使用 `v0.1.0`，与现有 GHCR tag 对齐。
+- Add-on/App 使用 GHCR 镜像：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0`。
 - 安装完成后进入 “配置 / Configuration”。
 - 填写国家电网账号密码、MQTT、REST、LLM 验证码接口。
 - 推荐保持 `PUBLISHER=both`。
 - 保存后在 “信息 / Info” 中启动。
 - 失败时查看日志和 `/data/errors`。
+
+带截图的安装教程见：[`ha_addons_doc/Add-on教程.md`](ha_addons_doc/Add-on教程.md)。
 
 ## 3. 配置项
 
