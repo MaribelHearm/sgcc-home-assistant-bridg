@@ -89,6 +89,8 @@ image: ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.0
 image: crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:latest
 ```
 
+`latest` 跟随 GitHub `main` 分支发布；也可以使用 `main` 或 `sha-xxxxxxx` 镜像 tag 固定到一次构建。
+
 查看日志：
 
 ```bash
@@ -159,7 +161,7 @@ examples/lovelace-sgcc-electricity.yaml
 ## 项目状态
 
 - 已在个人 Home Assistant 场景完成真实账号抓取验证。
-- CI 会运行单测并构建 / 发布 GHCR 镜像。
+- GitHub 默认分支为 `main`；CI 会运行单测并发布 GHCR 与阿里云 ACR 镜像。
 - 国网页面、腾讯验证码和账号风控可能变化；失败时优先查看 `/data/errors` 中的现场文件。
 - 本项目与国家电网、95598、腾讯验证码和 Home Assistant 官方无隶属关系。
 
