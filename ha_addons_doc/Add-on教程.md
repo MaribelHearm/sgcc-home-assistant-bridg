@@ -13,7 +13,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 - 预构建镜像先支持 `amd64`。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动。
 - 真实国网账号抓取、LLM 验证码和 MQTT 发布建议按自己的账号环境再跑一轮。
-- 旧截图来自上游项目，已移除；新的当前项目截图等真实抓取验证完成后再补。
+- 本页截图来自当前项目 `SGCC Home Assistant Bridge` 的 HAOS 测试环境，配置截图已遮挡手机号、密码、Key、Token 等敏感信息。
 
 ## 安装步骤
 
@@ -32,12 +32,16 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 
 7. 保存后刷新 Store。
 
+![添加当前项目 Add-on/App 仓库](img/current/01-add-repository.png)
+
 ### 2. 安装 SGCC Home Assistant Bridge
 
 1. 在 Store 中找到 **SGCC Home Assistant Bridge**。
 2. 打开详情页。
 3. 点击 **Install / 安装**。
 4. 等待安装完成。
+
+![Store 中识别到 SGCC Home Assistant Bridge](img/current/02-store-addon.png)
 
 如果列表里没有出现：
 
@@ -64,6 +68,8 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `MQTT_PASSWORD` | MQTT 密码，可留空。 |
 | `MQTT_DISCOVERY_PREFIX` | 通常保持 `homeassistant`。 |
 
+![Configuration 页面示例，敏感字段已遮挡](img/current/04-configuration-redacted.png)
+
 火山方舟 / 豆包示例：
 
 ```text
@@ -78,6 +84,10 @@ LLM_MODEL    = ep-xxxxxxxx
 2. 回到 **Info / 信息** 页面。
 3. 点击 **Start / 启动**。
 4. 查看 **Logs / 日志**。
+
+![Add-on/App 详情页](img/current/03-addon-detail.png)
+
+![Add-on/App 运行中状态，页面显示停止和重启按钮](img/current/05-addon-started.png)
 
 启动后程序会：
 
