@@ -185,14 +185,16 @@ def has_recent_cached_business_data(updator: SensorUpdator | None, config: Fetch
     if publisher not in {"rest", "mqtt", "both"}:
         publisher = "both"
 
-    if publisher in {"mqtt", "both"} and _store_has_recent_business_data():
-        return True
-    if publisher in {"rest", "both"} and updator is not None and _legacy_cache_has_today_business_data(updator):
-        return True
-    return False
+    mqtt_recent = _store_has_recent_business_data(config) if publisher in {"mqtt", "both"} else True
+    rest_recent = (
+        _legacy_cache_has_today_business_data(updator, config)
+        if publisher in {"rest", "both"} and updator is not None
+        else publisher == "mqtt"
+    )
+    return mqtt_recent and rest_recent
 
 
-def _store_has_recent_business_data() -> bool:
+def _store_has_recent_business_data(config: FetcherConfig) -> bool:
     try:
         with Store() as store:
             account_rows = store.conn.execute(
@@ -200,11 +202,14 @@ def _store_has_recent_business_data() -> bool:
             ).fetchall()
             if not account_rows:
                 return False
+            ignored_accounts = set(config.IGNORE_USER_ID or [])
             for row in account_rows:
                 account_no = row["account_no"]
+                if account_no in ignored_accounts:
+                    continue
                 account = store.get_account(account_no)
                 if account is None:
-                    return False
+                    continue
                 data = AccountData(
                     account=account,
                     balance=store.get_latest_balance(account_no),
@@ -220,7 +225,7 @@ def _store_has_recent_business_data() -> bool:
         return False
 
 
-def _legacy_cache_has_today_business_data(updator: SensorUpdator) -> bool:
+def _legacy_cache_has_today_business_data(updator: SensorUpdator, config: FetcherConfig) -> bool:
     cache_file = updator._get_cache_file()
     if not os.path.exists(cache_file):
         return False
@@ -232,14 +237,20 @@ def _legacy_cache_has_today_business_data(updator: SensorUpdator) -> bool:
         return False
 
     today_str = datetime.now().strftime("%Y-%m-%d")
-    for values in data.values():
+    valid_items = 0
+    ignored_accounts = set(config.IGNORE_USER_ID or [])
+    for user_id, values in data.items():
+        if str(user_id) in ignored_accounts:
+            continue
         if not isinstance(values, dict):
             continue
         cache_timestamp = values.get("timestamp", "")
         cache_date = cache_timestamp[:10] if cache_timestamp else ""
-        if cache_date == today_str and has_useful_legacy_cache_entry(values):
-            return True
-    return False
+        if cache_date != today_str:
+            return False
+        if has_useful_legacy_cache_entry(values):
+            valid_items += 1
+    return valid_items > 0
 
 
 def republish_mqtt_from_store(config: FetcherConfig) -> bool:
@@ -255,6 +266,7 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                 if not publisher.connected:
                     return False
                 ok = True
+                all_recent = True
                 published_count = 0
                 for row in account_rows:
                     account_no = row["account_no"]
@@ -277,16 +289,15 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                         continue
                     if not account_data_has_recent_cache_value(data):
                         logging.info(
-                            f"SQLite Store 缓存户号 {masked_account} 没有足够新的日用电/余额数据，需要真实抓取。"
+                            f"SQLite Store 缓存户号 {masked_account} 日用电/余额数据不够新，仍先发布已有缓存并等待真实抓取刷新。"
                         )
-                        ok = False
-                        continue
+                        all_recent = False
                     if publisher.publish_account_data(data):
                         published_count += 1
                     else:
                         ok = False
                 logging.info(f"MQTT 已从 SQLite 缓存重发布 {published_count} 个户号。")
-                return ok and published_count > 0
+                return ok and all_recent and published_count > 0
     except Exception as e:
         logging.warning(f"MQTT 缓存重发布失败，已忽略: {redact_text(e)}")
         return False
