@@ -244,7 +244,7 @@ class MqttPublisherTestCase(unittest.TestCase):
         self.assertEqual(yearly_attrs["year"], "2026")
         self.assertEqual(yearly_attrs["charge_cny"], 123.45)
 
-    def test_publish_account_data_emits_discovery_when_values_are_missing(self):
+    def test_publish_account_data_rejects_account_without_business_values(self):
         account_no = "1234567890123"
         cfg = FetcherConfig(
             MQTT_HOST="broker.local",
@@ -255,22 +255,9 @@ class MqttPublisherTestCase(unittest.TestCase):
 
         data = AccountData(account=Account(account_no=account_no))
 
-        self.assertTrue(publisher.publish_account_data(data))
+        self.assertFalse(publisher.publish_account_data(data))
         client = FakeClient.instances[-1]
-        config_topics = {topic for topic, payload, retain in client.published if topic.endswith("/config")}
-        state_topics = {topic for topic, payload, retain in client.published if topic.endswith("/state")}
-
-        self.assertIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/last_daily_usage/config", config_topics)
-        self.assertIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/month_valley/config", config_topics)
-        self.assertIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/month_flat/config", config_topics)
-        self.assertIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/month_peak/config", config_topics)
-        self.assertIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/month_tip/config", config_topics)
-        self.assertNotIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/daily_20260618/config", config_topics)
-        self.assertNotIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/monthly_202606/config", config_topics)
-        self.assertNotIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/year_2026/config", config_topics)
-        self.assertNotIn("sgcc/sgcc_xxxxxxxxx0123/last_daily_usage/state", state_topics)
-        self.assertNotIn("sgcc/sgcc_xxxxxxxxx0123/month_valley/state", state_topics)
-        self.assertIn("sgcc/sgcc_xxxxxxxxx0123/history/state", state_topics)
+        self.assertEqual(client.published, [])
 
 
 
