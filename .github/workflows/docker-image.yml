@@ -71,7 +71,7 @@ jobs:
           echo "GHCR_IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/sgcc-home-assistant-bridge" >> "$GITHUB_ENV"
           echo "GHCR_BROWSER_IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/sgcc-home-assistant-bridge-browser" >> "$GITHUB_ENV"
           echo "ALIYUN_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha" >> "$GITHUB_ENV"
-          echo "ALIYUN_BROWSER_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha_browser" >> "$GITHUB_ENV"
+          echo "ALIYUN_BROWSER_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -168,10 +168,10 @@ jobs:
         with:
           images: ${{ env.ALIYUN_BROWSER_IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch,prefix=browser-
+            type=ref,event=tag,prefix=browser-
+            type=sha,prefix=browser-sha-
+            type=raw,value=browser-latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build Aliyun ACR browser image
         if: github.event_name != 'pull_request' && env.HAS_ALIYUN_SECRETS == 'true'

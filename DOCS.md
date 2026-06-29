@@ -73,8 +73,8 @@ SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:lates
 固定版本可以使用：
 
 ```env
-SGCC_APP_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.3
-SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:v0.1.3
+SGCC_APP_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.4
+SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:v0.1.4
 ```
 
 Compose 使用 `browser-service` 时，app/browser 两个镜像建议固定到同一个 tag，避免 app 内 ChromeDriver 与 browser-service Chrome 版本不一致。
@@ -92,28 +92,35 @@ docker compose up -d
 
 ```env
 SGCC_APP_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:latest
-SGCC_BROWSER_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha_browser:latest
+SGCC_BROWSER_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-latest
 ```
 
 镜像 tag 规则：
 
 ```text
+# app 镜像
 latest                 # 跟随 main 分支
 main                   # main 分支构建
 sha-xxxxxxx            # 提交短 SHA
-v0.1.3                 # Git tag 发布后生成同名版本 tag
+v0.1.4                 # Git tag 发布后生成同名版本 tag
+
+# browser-service 镜像；与 app 共用公开仓库，使用 browser-* 前缀
+browser-latest
+browser-main
+browser-sha-xxxxxxx
+browser-v0.1.4
 ```
 
 例如：
 
 ```text
 crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:main
-crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha_browser:main
-crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:v0.1.3
-crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha_browser:v0.1.3
+crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-main
+crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:v0.1.4
+crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-v0.1.4
 ```
 
-本仓库默认分支为 `main`。CI 会同时发布 GHCR 与阿里云 ACR 的 app/browser 镜像。
+本仓库默认分支为 `main`。CI 会同时发布 GHCR app/browser 镜像；阿里云 ACR 使用同一个公开 `sgcc_ha` 仓库发布 app 普通 tag 和 browser `browser-*` tag。
 
 Home Assistant Add-on / App 默认仍使用 GHCR app 镜像；Add-on 是单容器模式，不需要单独拉 browser 镜像。
 
@@ -159,8 +166,8 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 说明：
 
 - 当前预构建镜像只发布 `amd64`，所以 `config.yaml` 也先只声明 `amd64`。
-- `config.yaml` 的 `version` 使用 `v0.1.3`，与 GHCR tag 对齐。
-- Add-on/App 使用 GHCR app 镜像：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.3`。
+- `config.yaml` 的 `version` 使用 `v0.1.4`，与 GHCR tag 对齐。
+- Add-on/App 使用 GHCR app 镜像：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.4`。
 - Add-on/App 是单容器部署，镜像内已经安装官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。
 - Add-on/App 默认 `SGCC_BROWSER_MODE=browser-service`，入口脚本会启动内嵌 browser manager；Chrome 本体只在抓取/登录时按需启动，任务结束后默认关闭。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动；真实国网登录、LLM 验证码和 MQTT 发布仍建议按自己的账号环境跑一轮。

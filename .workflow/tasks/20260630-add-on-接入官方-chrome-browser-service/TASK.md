@@ -18,7 +18,7 @@ validating
 - Docker Compose 用户可以直接 `docker compose pull && docker compose up -d` 使用成对镜像。
 - `local` 旧 Chromium 模式和 `host-cdp/cdp` 高级模式仍保留为配置切换/回滚路径。
 - 单测、YAML/脚本静态检查、Docker build、Add-on smoke、sidecar smoke、app→sidecar CDP attach smoke 通过。
-- 提交推送到 `main`，并创建/推送 `v0.1.3` tag 触发镜像发布。
+- 提交推送到 `main`，并创建/推送 `v0.1.4` tag 触发镜像发布。
 
 ## Current step
 执行最终复核、补齐质量门，然后 commit / push / tag。

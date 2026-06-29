@@ -92,20 +92,20 @@ SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:lates
 固定版本：
 
 ```env
-SGCC_APP_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.3
-SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:v0.1.3
+SGCC_APP_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.4
+SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:v0.1.4
 ```
 
 国内网络访问 GHCR 慢时，可以换成阿里云 ACR 镜像：
 
 ```env
 SGCC_APP_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:latest
-SGCC_BROWSER_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha_browser:latest
+SGCC_BROWSER_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-latest
 ```
 
-`latest` 跟随 GitHub `main` 分支发布；也可以使用 `main`、`sha-xxxxxxx` 或版本 tag 固定到一次构建。
+`latest` 跟随 GitHub `main` 分支发布；也可以使用 `main`、`sha-xxxxxxx` 或版本 tag 固定到一次构建。阿里云 ACR 为了保证匿名拉取稳定，app 和 browser 共用公开仓库：app 使用普通 tag，browser 使用 `browser-*` tag，例如 `sgcc_ha:v0.1.4` 搭配 `sgcc_ha:browser-v0.1.4`。
 
-Compose 使用 `browser-service` 时，`SGCC_APP_IMAGE` 和 `SGCC_BROWSER_IMAGE` 建议固定到同一个 tag，避免 app 内 ChromeDriver 与 sidecar Chrome 版本不一致。
+Compose 使用 `browser-service` 时，`SGCC_APP_IMAGE` 和 `SGCC_BROWSER_IMAGE` 建议固定到同一次发布的 tag，避免 app 内 ChromeDriver 与 sidecar Chrome 版本不一致。
 
 查看日志：
 
@@ -119,7 +119,7 @@ Home Assistant OS / Supervised 也可以直接添加 Add-on/App 仓库：
 https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 ```
 
-当前 Add-on 预构建镜像先支持 `amd64`，版本 `v0.1.3` 默认内置官方 Google Chrome `browser-service` 模式；Add-on 用户不需要在宿主机或 HAOS 上另装 Google Chrome。已在 HAOS 18.0 / Supervisor 2026.06.2 验证仓库添加、安装和启动流程。详细步骤见 [Add-on 安装教程](ha_addons_doc/Add-on教程.md)。
+当前 Add-on 预构建镜像先支持 `amd64`，版本 `v0.1.4` 默认内置官方 Google Chrome `browser-service` 模式；Add-on 用户不需要在宿主机或 HAOS 上另装 Google Chrome。已在 HAOS 18.0 / Supervisor 2026.06.2 验证仓库添加、安装和启动流程。详细步骤见 [Add-on 安装教程](ha_addons_doc/Add-on教程.md)。
 
 ### 4. 浏览器模式
 

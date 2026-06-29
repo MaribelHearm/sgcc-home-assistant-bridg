@@ -33,7 +33,7 @@
 - [x] Risks and rollback are written.
 
 ## Release readiness
-- Target: `main` + tag `v0.1.3`.
+- Target: `main` + tag `v0.1.4`.
 - Build: app and browser images build locally; CI configured to publish both to GHCR/ACR.
 - Config: Add-on defaults to `browser-service`; fallback `local` retained.
 - External publication: GitHub push/tag triggers image publishing; no secrets added.
@@ -42,3 +42,9 @@
 ## Remaining risk
 - RK001 is an upstream SGCC/Tencent risk signal; this release improves the browser runtime but cannot guarantee every account/IP/context avoids RK001.
 - Add-on currently declares `amd64` only because official Chrome package and validated image path are amd64.
+
+
+## v0.1.4 patch validation
+- `v0.1.3` CI succeeded, but anonymous pull check showed ACR app was public while new `sgcc_ha_browser` repository returned `insufficient_scope`.
+- v0.1.4 changes ACR browser publishing to the existing public `sgcc_ha` repository with `browser-*` tags.
+- Validation rerun: `git diff --check`, shell syntax, Python compile, YAML parse, 3+49 unit tests, `docker compose config`.

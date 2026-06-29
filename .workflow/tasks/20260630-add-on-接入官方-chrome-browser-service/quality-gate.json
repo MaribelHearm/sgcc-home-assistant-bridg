@@ -2,18 +2,18 @@
   "schema": "workflow-quality-gate.v1",
   "task": "Add-on 接入官方 Chrome browser-service",
   "generated_at": "2026-06-30T05:03:32+08:00",
-  "updated_at": "2026-06-30T06:19:37+08:00",
+  "updated_at": "2026-06-30T06:37:10+08:00",
   "result": "pass",
   "gates": {
     "acceptance_complete": {
       "status": "pass",
-      "evidence": "Add-on 单容器 browser-service、Compose 双镜像、CI 双镜像、文档和回滚配置均已落到真实入口。",
-      "updated_at": "2026-06-30T06:07:52+08:00"
+      "evidence": "Add-on 单容器 browser-service、Compose 双镜像、CI 双镜像、文档和回滚配置均已落到真实入口。 最终发布版本提升为 v0.1.4，修正 ACR browser 匿名拉取路径。",
+      "updated_at": "2026-06-30T06:37:10+08:00"
     },
     "validation_run": {
       "status": "pass",
-      "evidence": "最终复跑：git diff --check、shell/Python/YAML 静态检查、3+49 单测、app/browser Docker build、Compose config、Add-on embedded smoke、sidecar smoke、app→sidecar CDP attach smoke 均通过。",
-      "updated_at": "2026-06-30T06:19:37+08:00"
+      "evidence": "最终复跑：git diff --check、shell/Python/YAML 静态检查、3+49 单测、app/browser Docker build、Compose config、Add-on embedded smoke、sidecar smoke、app→sidecar CDP attach smoke 均通过。 v0.1.4 补丁额外复跑静态检查、YAML、3+49 单测和 Compose config。",
+      "updated_at": "2026-06-30T06:37:10+08:00"
     },
     "diff_reviewed": {
       "status": "pass",

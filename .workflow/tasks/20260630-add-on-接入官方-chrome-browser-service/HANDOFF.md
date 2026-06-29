@@ -4,11 +4,11 @@
 把 SGCC Home Assistant Bridge 的 Add-on/镜像完整接入官方 Google Chrome browser-service 模式，更新配置、文档、验证并推送。
 
 ## Current status
-validating / ready to commit
+validating / ready to commit v0.1.4
 
 ## Completed
 - Docker Compose 支持 app/browser 双镜像，默认 `browser-service`。
-- Add-on `v0.1.3` 默认单容器内嵌 browser manager，镜像内含官方 Chrome 和 matching ChromeDriver。
+- Add-on `v0.1.4` 默认单容器内嵌 browser manager，镜像内含官方 Chrome 和 matching ChromeDriver。
 - ChromeDriver 选择按 `local` 与 CDP/browser-service 分流。
 - sidecar entrypoint 修复 Xvfb host-network lock 和可选 noVNC helper 退出问题。
 - CI 增加 GHCR/ACR browser 镜像发布。
@@ -19,7 +19,7 @@ validating / ready to commit
 - 最终 `git diff --check` / status 复核。
 - `git commit -m "✨ feat: 支持 Add-on 官方 Chrome 模式"`。
 - `git push origin main`。
-- 如果远端不存在 `v0.1.3` tag，则创建并推送。
+- 如果远端不存在 `v0.1.4` tag，则创建并推送。
 - 检查 GitHub Actions 发布运行。
 
 ## Files changed
@@ -51,7 +51,7 @@ validating / ready to commit
 - app/browser 镜像应使用同一 tag，以避免 ChromeDriver 与 Chrome 不匹配。
 
 ## Next action
-跑最终检查，提交推送，打 `v0.1.3` tag，检查 CI。
+跑最终检查，提交推送，打 `v0.1.4` tag，检查 CI。
 
 ## Last user instruction
 - “你直接完美处理完 毕竟是给别人用了 处理完后 更新文档 开goal做 包括镜像 啊 addon 本体啊 做好”。

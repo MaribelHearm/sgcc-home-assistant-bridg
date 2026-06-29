@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [v0.1.4] - 2026-06-30
+
+### Fixed
+
+- 修正阿里云 ACR browser-service 镜像发布方式：browser 镜像改为发布到已公开的 `sgcc_ha:browser-*` tag，避免新建 `sgcc_ha_browser` 仓库匿名拉取失败。
+- Add-on 版本更新到 `v0.1.4`。
+
+### Docs
+
+- 更新 Docker Compose 国内镜像示例，app 使用 `sgcc_ha:*`，browser 使用 `sgcc_ha:browser-*`。
+
 ## [v0.1.3] - 2026-06-30
 
 ### Added
