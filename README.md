@@ -207,3 +207,24 @@ examples/lovelace-sgcc-electricity.yaml
 ## 许可证
 
 Apache License 2.0。详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+
+## 浏览器模式
+
+项目支持三种浏览器模式，通过 `.env` 的 `SGCC_BROWSER_MODE` 切换：
+
+| 模式 | 适用场景 | 行为 |
+|---|---|---|
+| `browser-service` | 推荐给群晖 NAS / x86 小主机 / Linux Server | `sgcc_browser` sidecar 内安装官方 Google Chrome；抓取时按需启动 Chrome，app 通过 CDP attach，用完关闭 Chrome |
+| `local` | 兼容旧部署 | app 容器内 Debian Chromium + Xvfb + ChromeDriver |
+| `host-cdp` / `cdp` | 高级调试或真实桌面测试 | app 连接外部已启动的 Chrome CDP 地址，不负责启动/关闭 Chrome |
+
+默认推荐：
+
+```env
+SGCC_BROWSER_MODE=browser-service
+SGCC_CDP_ADDRESS=127.0.0.1:19222
+SGCC_BROWSER_SERVICE_URL=http://127.0.0.1:39222
+SGCC_BROWSER_SERVICE_STOP_ON_RELEASE=true
+```
+
+`browser-service` 不是让 Chrome 长期常驻：常驻的是轻量 sidecar 管理器/Xvfb/noVNC，Google Chrome 本体在每次登录/抓取前启动，任务结束后关闭。遇到 RK001 时优先切到 `browser-service` 或 `host-cdp` 验证，不建议靠反复重试验证码硬撞。

@@ -1,4 +1,27 @@
 services:
+  sgcc_browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser
+    container_name: sgcc_browser
+    network_mode: host
+    environment:
+      TZ: Asia/Shanghai
+      DISPLAY: ":99"
+      SGCC_BROWSER_PROFILE: ${SGCC_BROWSER_SERVICE_PROFILE:-/data/sgcc-browser-profile}
+      SGCC_BROWSER_SERVICE_HOST: ${SGCC_BROWSER_SERVICE_HOST:-127.0.0.1}
+      SGCC_BROWSER_SERVICE_PORT: ${SGCC_BROWSER_SERVICE_PORT:-39222}
+      SGCC_BROWSER_CDP_HOST: ${SGCC_BROWSER_CDP_HOST:-127.0.0.1}
+      SGCC_BROWSER_CDP_PORT: ${SGCC_BROWSER_CDP_PORT:-19222}
+      SGCC_BROWSER_HOME_URL: ${SGCC_BROWSER_HOME_URL:-https://95598.cn/osgweb/login}
+      BROWSER_LANGUAGE: ${BROWSER_LANGUAGE:-zh-CN}
+      BROWSER_WINDOW_SIZE: ${BROWSER_WINDOW_SIZE:-1280,900}
+      SGCC_NOVNC_LISTEN: ${SGCC_NOVNC_LISTEN:-127.0.0.1:36180}
+    volumes:
+      - ${SGCC_BROWSER_SERVICE_PROFILE_HOST:-/data/sgcc-browser-profile}:${SGCC_BROWSER_SERVICE_PROFILE:-/data/sgcc-browser-profile}
+    restart: unless-stopped
+    init: true
+
   sgcc_electricity_app:
     build:
       context: .
@@ -6,6 +29,11 @@ services:
     container_name: sgcc_electricity_arc
     env_file:
       - .env
+    environment:
+      SGCC_BROWSER_MODE: ${SGCC_BROWSER_MODE:-browser-service}
+      SGCC_CDP_ADDRESS: ${SGCC_CDP_ADDRESS:-127.0.0.1:19222}
+      SGCC_BROWSER_SERVICE_URL: ${SGCC_BROWSER_SERVICE_URL:-http://127.0.0.1:39222}
+      SGCC_BROWSER_SERVICE_STOP_ON_RELEASE: ${SGCC_BROWSER_SERVICE_STOP_ON_RELEASE:-true}
     network_mode: host
     volumes:
       - /data:/data

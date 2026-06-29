@@ -1,0 +1,29 @@
+ARG BASE_IMAGE=python:3.12.11-slim-bookworm
+FROM ${BASE_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TZ=Asia/Shanghai \
+    LANG=C.UTF-8
+
+COPY scripts/browser_service.py /app/browser_service.py
+COPY scripts/browser-service-entrypoint.sh /app/browser-service-entrypoint.sh
+RUN chmod +x /app/browser-service-entrypoint.sh /app/browser_service.py
+
+RUN apt-get --allow-releaseinfo-change update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg fonts-noto-cjk tzdata \
+        xvfb fluxbox x11vnc novnc websockify \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
+    && chmod a+r /etc/apt/keyrings/google-linux.gpg \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get --allow-releaseinfo-change update \
+    && apt-get install -y --no-install-recommends google-chrome-stable \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+WORKDIR /app
+CMD ["/app/browser-service-entrypoint.sh"]
