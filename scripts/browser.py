@@ -36,13 +36,13 @@ def build_driver(config: FetcherConfig):
         "remote-debugging",
     }
 
-    service = _chrome_service()
+    service = _chrome_service(cdp_mode=cdp_mode)
 
     if cdp_mode:
         cdp_address = _cdp_address_from_env()
         if browser_service_mode:
             _browser_service_start()
-            logging.info(f"使用官方 Google Chrome sidecar CDP: {cdp_address}")
+            logging.info(f"使用官方 Google Chrome browser-service CDP: {cdp_address}")
         else:
             logging.info(f"使用外部 Google Chrome CDP: {cdp_address}")
 
@@ -160,7 +160,7 @@ def _browser_service_url() -> str:
 
 
 def _browser_service_start() -> None:
-    """Ask the sidecar manager to start official Google Chrome on demand."""
+    """Ask the browser-service manager to start official Google Chrome on demand."""
     url = _browser_service_url()
     timeout = float(os.getenv("SGCC_BROWSER_SERVICE_TIMEOUT", "90"))
     deadline = time.time() + timeout
@@ -174,7 +174,7 @@ def _browser_service_start() -> None:
         except Exception as e:
             last_error = e
         time.sleep(1)
-    raise RuntimeError(f"启动 SGCC Chrome sidecar 失败: {redact_text(last_error)}")
+    raise RuntimeError(f"启动 SGCC Chrome browser-service 失败: {redact_text(last_error)}")
 
 
 def _browser_service_stop() -> None:
@@ -182,13 +182,28 @@ def _browser_service_stop() -> None:
     try:
         response = requests.post(f"{url}/stop", timeout=10)
         if response.status_code >= 400:
-            logging.warning(f"停止 SGCC Chrome sidecar 失败: HTTP {response.status_code}: {redact_text(response.text[:300])}")
+            logging.warning(f"停止 SGCC Chrome browser-service 失败: HTTP {response.status_code}: {redact_text(response.text[:300])}")
     except Exception as e:
-        logging.warning(f"停止 SGCC Chrome sidecar 异常: {redact_text(e)}")
+        logging.warning(f"停止 SGCC Chrome browser-service 异常: {redact_text(e)}")
 
 
-def _chrome_service() -> ChromeService:
+def _chrome_service(cdp_mode: bool = False) -> ChromeService:
+    configured = os.getenv("SGCC_CHROMEDRIVER_PATH", "").strip()
+    if configured:
+        return ChromeService(executable_path=configured)
+
     if 'PYTHON_IN_DOCKER' in os.environ:
+        # local mode drives Debian Chromium, so keep Debian chromedriver first.
+        # browser-service/CDP mode attaches to official Google Chrome; prefer the
+        # Chrome-for-Testing driver installed beside google-chrome-stable.
+        candidates = (
+            ["/usr/local/bin/chromedriver", "/usr/bin/chromedriver"]
+            if cdp_mode
+            else ["/usr/bin/chromedriver", "/usr/local/bin/chromedriver"]
+        )
+        for path in candidates:
+            if os.path.exists(path):
+                return ChromeService(executable_path=path)
         return ChromeService(executable_path="/usr/bin/chromedriver")
     return _find_chromedriver()
 
@@ -246,7 +261,7 @@ def release_driver(driver) -> None:
                 pass
             if browser_service_mode and os.getenv("SGCC_BROWSER_SERVICE_STOP_ON_RELEASE", "true").strip().lower() not in {"0", "false", "no"}:
                 _browser_service_stop()
-                logging.info("浏览器驱动已断开；sidecar Chrome 已按需关闭。")
+                logging.info("浏览器驱动已断开；browser-service Chrome 已按需关闭。")
             else:
                 logging.info("浏览器驱动已断开；外部 Chrome 保持原运行状态。")
             return

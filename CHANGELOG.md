@@ -2,13 +2,22 @@
 
 ## [Unreleased]
 
+## [v0.1.3] - 2026-06-30
+
 ### Added
 
-- Docker Compose 新增官方 Google Chrome sidecar 浏览器模式，默认 `SGCC_BROWSER_MODE=browser-service`，主程序通过 CDP attach，Chrome 按需启动并在任务结束后关闭。
+- Docker Compose 新增官方 Google Chrome browser-service sidecar 镜像，默认 `SGCC_BROWSER_MODE=browser-service`，主程序通过 CDP attach，Chrome 按需启动并在任务结束后关闭。
+- Home Assistant Add-on 默认接入单容器内嵌 browser-service，镜像内安装官方 `google-chrome-stable` 和匹配 ChromeDriver；Add-on 用户不需要另装 Google Chrome。
+- CI 同时发布 app 镜像和 browser-service 镜像到 GHCR / 阿里云 ACR。
+
+### Changed
+
+- Add-on 版本更新到 `v0.1.3`。
+- `docker-compose.yml` 支持通过 `SGCC_APP_IMAGE` / `SGCC_BROWSER_IMAGE` 直接拉取预构建镜像，也保留本地 build。
 
 ### Docs
 
-- 补充 `browser-service` / `local` / `host-cdp` 三种浏览器模式说明，以及 RK001 场景下的配置切换方式。
+- 补充 `browser-service` / `local` / `host-cdp` 三种浏览器模式说明，以及 Docker Compose、Add-on 和 RK001 场景下的配置切换方式。
 
 ## [v0.1.2] - 2026-06-27
 

@@ -1,0 +1,49 @@
+{
+  "schema": "workflow-quality-gate.v1",
+  "task": "Add-on 接入官方 Chrome browser-service",
+  "generated_at": "2026-06-30T05:03:32+08:00",
+  "updated_at": "2026-06-30T06:19:37+08:00",
+  "result": "pass",
+  "gates": {
+    "acceptance_complete": {
+      "status": "pass",
+      "evidence": "Add-on 单容器 browser-service、Compose 双镜像、CI 双镜像、文档和回滚配置均已落到真实入口。",
+      "updated_at": "2026-06-30T06:07:52+08:00"
+    },
+    "validation_run": {
+      "status": "pass",
+      "evidence": "最终复跑：git diff --check、shell/Python/YAML 静态检查、3+49 单测、app/browser Docker build、Compose config、Add-on embedded smoke、sidecar smoke、app→sidecar CDP attach smoke 均通过。",
+      "updated_at": "2026-06-30T06:19:37+08:00"
+    },
+    "diff_reviewed": {
+      "status": "pass",
+      "evidence": "已审查 git diff/stat 并运行 diff-risk-reviewer；高风险路径为 Dockerfile/CI/entrypoint/Compose/.workflow，均有 build/smoke/rollback 覆盖。",
+      "updated_at": "2026-06-30T06:19:37+08:00"
+    },
+    "handoff_current": {
+      "status": "pass",
+      "evidence": "HANDOFF.md 已更新到 ready-to-commit 状态，包含后续 commit/push/tag/CI 步骤。",
+      "updated_at": "2026-06-30T06:07:52+08:00"
+    },
+    "ledger_current": {
+      "status": "pass",
+      "evidence": "ledger.jsonl 已记录实现、验证、文档和收尾切片。",
+      "updated_at": "2026-06-30T06:07:52+08:00"
+    },
+    "no_placeholder_core": {
+      "status": "pass",
+      "evidence": "核心路径无 placeholder/mock；dummy main 仅用于 Add-on smoke 容器验证。",
+      "updated_at": "2026-06-30T06:07:52+08:00"
+    },
+    "rollback_known": {
+      "status": "pass",
+      "evidence": "运行时可设 SGCC_BROWSER_MODE=local 回滚；发布可固定旧 tag 或 revert commit；不 force push/tag。",
+      "updated_at": "2026-06-30T06:07:52+08:00"
+    },
+    "spec_or_parking_updated": {
+      "status": "pass",
+      "evidence": "用户面契约已写入 README/DOCS/Add-on 教程/CHANGELOG/example.env；本任务 .workflow 已同步。",
+      "updated_at": "2026-06-30T06:07:52+08:00"
+    }
+  }
+}

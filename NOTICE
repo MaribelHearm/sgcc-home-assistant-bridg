@@ -15,7 +15,7 @@ Major changes in this derived work include:
 - SQLite local fact store for account data, fetch runs, session checks and
   publisher state;
 - multimodal LLM assisted Tencent click-captcha solving with QR-code fallback;
-- official Google Chrome sidecar mode with CDP attach, plus compatible per-run headful Chromium/Xvfb browser lifecycle;
+- official Google Chrome browser-service mode with Docker Compose sidecar or embedded Home Assistant Add-on manager, CDP attach, and compatible per-run headful Chromium/Xvfb browser lifecycle;
 - Home Assistant MQTT Discovery publishing with REST compatibility.
 
 Licensed under the Apache License, Version 2.0. See LICENSE for details.

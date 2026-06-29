@@ -13,15 +13,30 @@ ARG VERSION
 ENV VERSION=${VERSION}
 ENV PYTHON_IN_DOCKER='PYTHON_IN_DOCKER'
 
-COPY scripts/* /app/
-RUN chmod +x /app/docker-entrypoint.sh
 WORKDIR /app
 
 RUN apt-get --allow-releaseinfo-change update \
     && apt-get install -y --no-install-recommends \
-        jq fonts-noto-cjk tzdata \
+        ca-certificates curl gnupg jq unzip fonts-noto-cjk tzdata \
         chromium chromium-driver \
         xvfb \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
+    && chmod a+r /etc/apt/keyrings/google-linux.gpg \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get --allow-releaseinfo-change update \
+    && apt-get install -y --no-install-recommends google-chrome-stable \
+    && CHROME_VERSION="$(google-chrome --product-version)" \
+    && CHROME_BUILD="${CHROME_VERSION%.*}" \
+    && CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip" \
+    && if ! curl -fsI "$CHROMEDRIVER_URL" >/dev/null; then \
+         CHROMEDRIVER_VERSION="$(curl -fsSL "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_BUILD}")"; \
+         CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"; \
+       fi \
+    && curl -fsSL -o /tmp/chromedriver-linux64.zip "$CHROMEDRIVER_URL" \
+    && unzip -q /tmp/chromedriver-linux64.zip -d /tmp \
+    && install -m 0755 /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+    && /usr/local/bin/chromedriver --version \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
     && dpkg-reconfigure --frontend noninteractive tzdata \
@@ -41,6 +56,9 @@ RUN mkdir /data \
     && pip cache purge \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/log/*
+
+COPY scripts/* /app/
+RUN chmod +x /app/docker-entrypoint.sh /app/browser-service-entrypoint.sh /app/browser_service.py
 
 ENV LANG=C.UTF-8
 

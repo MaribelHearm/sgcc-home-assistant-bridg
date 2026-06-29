@@ -1,0 +1,8 @@
+{
+  "active_task": "20260630-add-on-接入官方-chrome-browser-service",
+  "active_phase": "ready_to_commit",
+  "current_goal": "把 SGCC Home Assistant Bridge 的 Add-on/镜像完整接入官方 Google Chrome browser-service 模式，更新配置、文档、验证并推送",
+  "last_validation": "final static + unit + docker build + compose config + add-on smoke + sidecar smoke + app-to-sidecar attach smoke passed",
+  "last_handoff": ".workflow/tasks/20260630-add-on-接入官方-chrome-browser-service/HANDOFF.md",
+  "updated_at": "2026-06-30T06:19:37+08:00"
+}

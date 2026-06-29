@@ -11,13 +11,13 @@ rm -f "$PROFILE_DIR"/SingletonLock "$PROFILE_DIR"/SingletonSocket "$PROFILE_DIR"
 
 PIDS=()
 cleanup() {
-  for pid in "${PIDS[@]:-}"; do
+  for pid in "${PIDS[@]}"; do
     kill "$pid" >/dev/null 2>&1 || true
   done
 }
 trap cleanup EXIT INT TERM
 
-Xvfb "$DISPLAY" -screen 0 1440x960x24 -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
+Xvfb "$DISPLAY" -screen 0 1440x960x24 -ac +extension RANDR -nolisten tcp -nolisten local -nolock >/tmp/xvfb.log 2>&1 &
 PIDS+=("$!")
 sleep 1
 if ! kill -0 "${PIDS[0]}" >/dev/null 2>&1; then
@@ -40,7 +40,11 @@ if command -v x11vnc >/dev/null 2>&1 && command -v websockify >/dev/null 2>&1; t
 fi
 
 python3 -u /app/browser_service.py &
-PIDS+=("$!")
+SERVICE_PID="$!"
+PIDS+=("$SERVICE_PID")
 
-wait -n
+# Keep browser_service.py as the primary process. Optional desktop helpers
+# (fluxbox/x11vnc/websockify) may exit on minimal hosts; they must not bring
+# down the browser manager used by Docker Compose.
+wait "$SERVICE_PID"
 exit $?

@@ -11,6 +11,8 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 当前状态：
 
 - 预构建镜像先支持 `amd64`。
+- 当前 Add-on 版本 `v0.1.3`，默认使用官方 Google Chrome `browser-service` 模式。
+- Add-on 是单容器部署，镜像内已经包含官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动。
 - 真实国网账号抓取、LLM 验证码和 MQTT 发布建议按自己的账号环境再跑一轮。
 - 本页截图来自当前项目 `SGCC Home Assistant Bridge` 的 HAOS 测试环境，配置截图已遮挡手机号、密码、Key、Token 等敏感信息。
@@ -67,6 +69,8 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `MQTT_USERNAME` | MQTT 用户名，可留空。 |
 | `MQTT_PASSWORD` | MQTT 密码，可留空。 |
 | `MQTT_DISCOVERY_PREFIX` | 通常保持 `homeassistant`。 |
+| `SGCC_BROWSER_MODE` | 默认 `browser-service`；如需回滚旧 Chromium 模式，可改为 `local`。 |
+| `SGCC_BROWSER_SERVICE_STOP_ON_RELEASE` | 默认 `true`；每轮抓取结束后关闭 Chrome 本体，降低常驻资源占用。 |
 
 ![Configuration 页面示例，敏感字段已遮挡](img/current/04-configuration-redacted.png)
 
@@ -92,7 +96,8 @@ LLM_MODEL    = ep-xxxxxxxx
 启动后程序会：
 
 - 读取 Add-on 配置。
-- 启动内置 Xvfb + Chromium。
+- 启动内置 Xvfb 和轻量 browser manager。
+- 默认使用官方 `google-chrome-stable`，在登录/抓取前按需启动 Chrome，通过 CDP attach，任务结束后关闭 Chrome 本体。
 - 尝试从 SQLite 缓存恢复数据。
 - 缓存不可用时登录国网页面抓取数据。
 - 通过 MQTT Discovery / REST 发布到 Home Assistant。
@@ -127,14 +132,15 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 ### 安装失败
 
 - 检查 HAOS/Supervisor 能否拉取 GHCR 镜像。
-- 镜像为：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.1`
-- 国内网络如果拉取 GHCR 很慢，可以后续考虑国内镜像源；当前 Add-on 默认使用 GHCR。
+- 镜像为：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.3`
+- 国内网络如果拉取 GHCR 很慢，可以先确认 HAOS/Supervisor 能访问 GHCR；当前 Add-on 默认使用 GHCR app 镜像。
 
-### 验证码失败
+### 验证码/登录未通过
 
 - 确认 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 正确。
 - 确认模型支持图片输入。
 - 火山方舟建议 `LLM_MODEL` 填 `ep-...` 接入点 ID。
+- 默认浏览器模式应为 `SGCC_BROWSER_MODE=browser-service`；如需临时回滚旧模式，可改为 `local` 后重启 Add-on。
 
 ### MQTT 实体未出现
 
@@ -148,4 +154,5 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 - 查看 Add-on 日志。
 - 查看 `/data/errors` 中的错误截图、HTML 和 metadata。
 - 如果出现 `RK001`，通常是 95598 / 腾讯验证码风控命中，本项目会停止本轮，避免反复打账号。
-- Docker Compose 用户可以改用 `SGCC_BROWSER_MODE=browser-service`，使用官方 Google Chrome sidecar 按需启动模式；Home Assistant Add-on 当前仍使用内置 Chromium 模式。
+- Add-on 和 Docker Compose 默认都使用 `SGCC_BROWSER_MODE=browser-service`。Add-on 内嵌官方 Google Chrome browser manager；Docker Compose 使用官方 Google Chrome sidecar。
+- 如果当前环境不适合新模式，可以把 `SGCC_BROWSER_MODE` 改成 `local` 回滚到 Debian Chromium + Xvfb。

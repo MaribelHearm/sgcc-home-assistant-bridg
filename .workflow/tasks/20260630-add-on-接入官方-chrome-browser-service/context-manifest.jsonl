@@ -1,0 +1,12 @@
+{"path": "Dockerfile-for-github-action", "reason": "app/Add-on 镜像入口；安装官方 Chrome、matching ChromeDriver、保留 local Chromium。"}
+{"path": "Dockerfile.browser", "reason": "Compose browser-service sidecar 镜像入口；安装官方 Chrome 与 Xvfb/noVNC 辅助。"}
+{"path": "scripts/docker-entrypoint.sh", "reason": "Add-on/Compose app 容器启动分流；读取 options.json；嵌入 browser-service。"}
+{"path": "scripts/browser-service-entrypoint.sh", "reason": "sidecar 启动 Xvfb 和 browser manager。"}
+{"path": "scripts/browser.py", "reason": "Selenium/ChromeDriver/CDP attach 核心逻辑。"}
+{"path": "scripts/browser_service.py", "reason": "按需启动/停止官方 Chrome 的 HTTP manager。"}
+{"path": "docker-compose.yml", "reason": "双镜像服务定义和默认 browser-service env。"}
+{"path": "config.yaml", "reason": "Home Assistant Add-on 版本、默认选项和 schema。"}
+{"path": ".github/workflows/docker-image.yml", "reason": "app/browser 镜像 CI 发布。"}
+{"path": "README.md", "reason": "用户快速开始、Add-on 和浏览器模式说明。"}
+{"path": "DOCS.md", "reason": "详细部署、镜像、Add-on、RK001 和配置说明。"}
+{"path": "ha_addons_doc/Add-on教程.md", "reason": "Add-on 用户安装与配置说明。"}

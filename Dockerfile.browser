@@ -6,10 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=Asia/Shanghai \
     LANG=C.UTF-8
 
-COPY scripts/browser_service.py /app/browser_service.py
-COPY scripts/browser-service-entrypoint.sh /app/browser-service-entrypoint.sh
-RUN chmod +x /app/browser-service-entrypoint.sh /app/browser_service.py
-
 RUN apt-get --allow-releaseinfo-change update \
     && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg fonts-noto-cjk tzdata \
@@ -26,4 +22,8 @@ RUN apt-get --allow-releaseinfo-change update \
     && apt-get clean
 
 WORKDIR /app
+COPY scripts/browser_service.py /app/browser_service.py
+COPY scripts/browser-service-entrypoint.sh /app/browser-service-entrypoint.sh
+RUN chmod +x /app/browser-service-entrypoint.sh /app/browser_service.py
+
 CMD ["/app/browser-service-entrypoint.sh"]

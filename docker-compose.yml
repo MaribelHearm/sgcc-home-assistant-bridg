@@ -1,5 +1,6 @@
 services:
   sgcc_browser:
+    image: ${SGCC_BROWSER_IMAGE:-ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:latest}
     build:
       context: .
       dockerfile: Dockerfile.browser
@@ -23,6 +24,7 @@ services:
     init: true
 
   sgcc_electricity_app:
+    image: ${SGCC_APP_IMAGE:-ghcr.io/maribelhearm/sgcc-home-assistant-bridge:latest}
     build:
       context: .
       dockerfile: Dockerfile-for-github-action
@@ -34,6 +36,8 @@ services:
       SGCC_CDP_ADDRESS: ${SGCC_CDP_ADDRESS:-127.0.0.1:19222}
       SGCC_BROWSER_SERVICE_URL: ${SGCC_BROWSER_SERVICE_URL:-http://127.0.0.1:39222}
       SGCC_BROWSER_SERVICE_STOP_ON_RELEASE: ${SGCC_BROWSER_SERVICE_STOP_ON_RELEASE:-true}
+      SGCC_BROWSER_SERVICE_EMBEDDED: ${SGCC_BROWSER_SERVICE_EMBEDDED:-false}
+      SGCC_LOAD_ADDON_OPTIONS: ${SGCC_LOAD_ADDON_OPTIONS:-false}
     network_mode: host
     volumes:
       - /data:/data

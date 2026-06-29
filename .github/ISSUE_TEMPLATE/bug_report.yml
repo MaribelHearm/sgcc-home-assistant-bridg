@@ -23,7 +23,7 @@ body:
     id: project_version
     attributes:
       label: 项目版本 / 镜像 tag
-      description: 例如 latest、main、sha-xxxxxxx、v0.1.1；如果不确定，请贴启动日志里的版本行。
+      description: 例如 latest、main、sha-xxxxxxx、v0.1.3；如果不确定，请贴启动日志里的版本行。
       placeholder: latest
     validations:
       required: true
@@ -60,6 +60,18 @@ body:
         - both
         - mqtt
         - rest
+        - 不确定 / 未配置
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser_mode
+    attributes:
+      label: SGCC_BROWSER_MODE
+      options:
+        - browser-service
+        - local
+        - host-cdp / cdp
         - 不确定 / 未配置
     validations:
       required: true
