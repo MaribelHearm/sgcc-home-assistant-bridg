@@ -1,10 +1,10 @@
-# SGCC Home Assistant Bridge - Nord 毛玻璃卡片
+# SGCC Home Assistant Bridge - 自用 Lovelace 卡片
 # 需要把 examples/custom-cards/sgcc-electricity-card.js 放到 HA /config/www/sgcc/，
 # 并在 Lovelace resources 添加 /local/sgcc/sgcc-electricity-card.js，类型 module。
 # 把 4840 替换成自己的户号后四位。
 
 title: 国网电费
-path: sgcc-nord-glass
+path: sgcc-electricity-card
 icon: mdi:transmission-tower
 type: panel
 background: "linear-gradient(180deg, rgba(6,12,26,0.55) 0%, rgba(5,10,22,0.68) 58%, rgba(3,7,16,0.80) 100%)"

@@ -220,7 +220,7 @@ Lovelace 示例在：
 examples/lovelace-cards/
 ```
 
-内置三张示例卡片，不会自动安装；曲线部分依赖 HACS 的 `apexcharts-card`。
+内置当前项目自用卡片示例，不会自动安装。已有 `state_grid` 仪表盘 YAML 可用 `tools/convert_state_grid_lovelace.py` 做字段替换。
 
 ## 常见问题
 
@@ -248,7 +248,8 @@ examples/lovelace-cards/
 
 - [DOCS.md](DOCS.md)：完整配置、实体、架构、故障排查和上游关系。
 - [example.env](example.env)：环境变量示例。
-- [Lovelace 示例](examples/lovelace-cards/)：三张 HA 仪表盘示例卡片。
+- [Lovelace 示例](examples/lovelace-cards/)：HA 自用卡片示例。
+- [state_grid Lovelace 迁移说明](docs/state-grid-lovelace-migration.md)：把已有 `state_grid` 仪表盘 YAML 做字段替换。
 - [CHANGELOG.md](CHANGELOG.md)：版本记录。
 - [NOTICE](NOTICE)：上游来源与版权说明。
 

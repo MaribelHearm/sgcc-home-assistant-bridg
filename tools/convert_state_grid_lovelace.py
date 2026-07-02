@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Convert Lovelace YAML snippets from state_grid entity names to this project.
+
+This is intentionally an offline field-replacement helper. It does not add a
+state_grid compatibility layer to the backend.
+"""
+from __future__ import annotations
+
+import argparse
+import re
+from pathlib import Path
+
+
+def sgcc_entities(suffix: str) -> dict[str, str]:
+    base = f"sensor.guo_wang_dian_fei_{suffix}"
+    return {
+        "history": f"{base}_li_shi_shu_ju_{suffix}",
+        "balance": f"{base}_dian_fei_yu_e_{suffix}",
+        "arrears": f"{base}_ying_jiao_jin_e_{suffix}",
+        "prepay": f"{base}_yu_fu_fei_yu_e_{suffix}",
+        "latest_daily": f"{base}_zui_jin_ri_yong_dian_{suffix}",
+        "month_usage": f"{base}_yue_du_yong_dian_{suffix}",
+        "month_charge": f"{base}_yue_du_dian_fei_{suffix}",
+        "year_usage": f"{base}_nian_du_yong_dian_{suffix}",
+        "year_charge": f"{base}_nian_du_dian_fei_{suffix}",
+        "month_valley": f"{base}_yue_du_gu_shi_dian_liang_{suffix}",
+        "month_flat": f"{base}_yue_du_ping_shi_dian_liang_{suffix}",
+        "month_peak": f"{base}_yue_du_feng_shi_dian_liang_{suffix}",
+        "month_tip": f"{base}_yue_du_jian_shi_dian_liang_{suffix}",
+    }
+
+
+# state_grid keys seen in lxg20082008/state_grid and older README examples.
+KEY_MAP: dict[str, str] = {
+    "balance": "balance",
+    "daily_ele": "latest_daily",
+    "daily_ele_num": "latest_daily",
+    "monthly_ele": "month_usage",
+    "month_ele_num": "month_usage",
+    "month_ele_cost": "month_charge",
+    "yearly_ele": "year_usage",
+    "year_ele_num": "year_usage",
+    "year_ele_cost": "year_charge",
+    "month_v_ele_num": "month_valley",
+    "month_n_ele_num": "month_flat",
+    "month_p_ele_num": "month_peak",
+    "month_t_ele_num": "month_tip",
+    "valley_ele": "month_valley",
+    "normal_ele": "month_flat",
+    "peak_ele": "month_peak",
+    "sharp_ele": "month_tip",
+    "recent_30_daily_ele_list": "history",
+    "recent_12_monthly_ele_list": "history",
+}
+
+STATE_GRID_ENTITY_RE = re.compile(
+    r"sensor\.state_grid(?:_[A-Za-z0-9]+)?_(?P<key>"
+    + "|".join(re.escape(k) for k in sorted(KEY_MAP, key=len, reverse=True))
+    + r")\b"
+)
+
+DAILY_GRAPH_RE = re.compile(r"sensor\.state_grid(?:_[A-Za-z0-9]+)?_recent_30_daily_ele_list\b")
+MONTHLY_GRAPH_RE = re.compile(r"sensor\.state_grid(?:_[A-Za-z0-9]+)?_recent_12_monthly_ele_list\b")
+ANY_ENTITY_LINE_RE = re.compile(r"^\s*-?\s*entity:\s*")
+
+
+def _replace_graph_access(line: str, graph_kind: str | None) -> str:
+    if not graph_kind:
+        return line
+    attr = "daily" if graph_kind == "daily" else "monthly"
+    line = line.replace("entity.attributes.graph", f"entity.attributes.{attr}")
+    line = line.replace("entity.attributes['graph']", f"entity.attributes['{attr}']")
+    line = line.replace('entity.attributes["graph"]', f'entity.attributes["{attr}"]')
+    line = line.replace("attributes.graph", f"attributes.{attr}")
+    line = line.replace("attributes['graph']", f"attributes['{attr}']")
+    line = line.replace('attributes["graph"]', f'attributes["{attr}"]')
+    return line
+
+
+def convert_text(text: str, account_suffix: str) -> tuple[str, dict[str, int]]:
+    entities = sgcc_entities(account_suffix)
+    counts: dict[str, int] = {"entity": 0, "daily_graph": 0, "monthly_graph": 0}
+
+    graph_kind: str | None = None
+    converted_lines: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if DAILY_GRAPH_RE.search(line):
+            graph_kind = "daily"
+        elif MONTHLY_GRAPH_RE.search(line):
+            graph_kind = "monthly"
+        elif ANY_ENTITY_LINE_RE.search(line) and "state_grid" in line:
+            graph_kind = None
+
+        before_graph = line
+        line = _replace_graph_access(line, graph_kind)
+        if line != before_graph:
+            counts[f"{graph_kind}_graph"] += 1
+
+        def repl(match: re.Match[str]) -> str:
+            key = match.group("key")
+            counts["entity"] += 1
+            return entities[KEY_MAP[key]]
+
+        line = STATE_GRID_ENTITY_RE.sub(repl, line)
+        converted_lines.append(line)
+
+    return "".join(converted_lines), counts
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="把 state_grid Lovelace YAML 里的实体字段替换成本项目字段。"
+    )
+    parser.add_argument("input", help="输入 Lovelace YAML 文件，使用 - 表示 stdin")
+    parser.add_argument("--account-suffix", required=True, help="本项目实体里的户号后四位，例如 4840")
+    parser.add_argument("--output", "-o", help="输出文件；不填则写 stdout")
+    parser.add_argument("--quiet", action="store_true", help="不在 stderr 打印替换统计")
+    args = parser.parse_args()
+
+    if args.input == "-":
+        import sys
+
+        src = sys.stdin.read()
+    else:
+        src = Path(args.input).read_text(encoding="utf-8")
+
+    out, counts = convert_text(src, args.account_suffix)
+
+    if args.output:
+        Path(args.output).write_text(out, encoding="utf-8")
+    else:
+        print(out, end="")
+
+    if not args.quiet:
+        import sys
+
+        print(
+            f"converted entities={counts['entity']} daily_graph={counts['daily_graph']} monthly_graph={counts['monthly_graph']}",
+            file=sys.stderr,
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
