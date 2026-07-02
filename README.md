@@ -217,10 +217,10 @@ REST 兼容实体主要用于迁移旧仪表盘或自动化。如果不需要兼
 Lovelace 示例在：
 
 ```text
-examples/lovelace-sgcc-electricity.yaml
+examples/lovelace-cards/
 ```
 
-它只是示例视图，不会自动安装；曲线部分依赖 HACS 的 `apexcharts-card`。
+内置三张示例卡片，不会自动安装；曲线部分依赖 HACS 的 `apexcharts-card`。
 
 ## 常见问题
 
@@ -248,7 +248,7 @@ examples/lovelace-sgcc-electricity.yaml
 
 - [DOCS.md](DOCS.md)：完整配置、实体、架构、故障排查和上游关系。
 - [example.env](example.env)：环境变量示例。
-- [Lovelace 示例](examples/lovelace-sgcc-electricity.yaml)：HA 仪表盘示例视图。
+- [Lovelace 示例](examples/lovelace-cards/)：三张 HA 仪表盘示例卡片。
 - [CHANGELOG.md](CHANGELOG.md)：版本记录。
 - [NOTICE](NOTICE)：上游来源与版权说明。
 

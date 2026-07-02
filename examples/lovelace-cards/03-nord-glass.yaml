@@ -1,0 +1,30 @@
+# SGCC Home Assistant Bridge - Nord 毛玻璃卡片
+# 需要把 examples/custom-cards/sgcc-electricity-card.js 放到 HA /config/www/sgcc/，
+# 并在 Lovelace resources 添加 /local/sgcc/sgcc-electricity-card.js，类型 module。
+# 把 4840 替换成自己的户号后四位。
+
+title: 国网电费
+path: sgcc-nord-glass
+icon: mdi:transmission-tower
+type: panel
+background: "linear-gradient(180deg, rgba(6,12,26,0.55) 0%, rgba(5,10,22,0.68) 58%, rgba(3,7,16,0.80) 100%)"
+cards:
+  - type: custom:sgcc-electricity-card
+    title: 国网电费
+    account_label: 户号 ****4840
+    history_entity: sensor.guo_wang_dian_fei_4840_li_shi_shu_ju_4840
+    month_usage_entity: sensor.guo_wang_dian_fei_4840_yue_du_yong_dian_4840
+    month_charge_entity: sensor.guo_wang_dian_fei_4840_yue_du_dian_fei_4840
+    latest_daily_entity: sensor.guo_wang_dian_fei_4840_zui_jin_ri_yong_dian_4840
+    balance_entity: sensor.guo_wang_dian_fei_4840_dian_fei_yu_e_4840
+    arrears_entity: sensor.guo_wang_dian_fei_4840_ying_jiao_jin_e_4840
+    prepay_entity: sensor.guo_wang_dian_fei_4840_yu_fu_fei_yu_e_4840
+    year_usage_entity: sensor.guo_wang_dian_fei_4840_nian_du_yong_dian_4840
+    year_charge_entity: sensor.guo_wang_dian_fei_4840_nian_du_dian_fei_4840
+    tou_entities:
+      valley: sensor.guo_wang_dian_fei_4840_yue_du_gu_shi_dian_liang_4840
+      flat: sensor.guo_wang_dian_fei_4840_yue_du_ping_shi_dian_liang_4840
+      peak: sensor.guo_wang_dian_fei_4840_yue_du_feng_shi_dian_liang_4840
+      tip: sensor.guo_wang_dian_fei_4840_yue_du_jian_shi_dian_liang_4840
+    daily_days: 31
+    monthly_months: 12
