@@ -11,6 +11,10 @@ requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dynamic = ["dependencies"]
 
+[project.scripts]
+sgcc-ha-bridge = "sgcc_ha_bridge.main:main"
+sgcc-browser-service = "sgcc_ha_bridge.browser_service:main"
+
 [tool.setuptools.packages.find]
 include = ["sgcc_ha_bridge*"]
 

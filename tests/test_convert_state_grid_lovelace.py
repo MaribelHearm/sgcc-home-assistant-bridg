@@ -1,4 +1,7 @@
 import importlib.util
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -42,6 +45,33 @@ series:
         self.assertIn('entity.attributes["monthly"]', out)
         self.assertEqual(counts["daily_graph"], 1)
         self.assertEqual(counts["monthly_graph"], 1)
+
+    def test_cli_accepts_suffix_alias_and_output_positional(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "input.yaml"
+            dst = Path(tmp) / "output.yaml"
+            src.write_text("entity: sensor.state_grid_123456_balance\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "tools" / "convert_state_grid_lovelace.py"),
+                    str(src),
+                    str(dst),
+                    "--suffix",
+                    "4840",
+                    "--quiet",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.stderr, "")
+            self.assertIn(
+                "sensor.guo_wang_dian_fei_4840_dian_fei_yu_e_4840",
+                dst.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

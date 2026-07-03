@@ -39,11 +39,11 @@ if command -v x11vnc >/dev/null 2>&1 && command -v websockify >/dev/null 2>&1; t
   echo "noVNC ready on ${NOVNC_LISTEN}; Chrome will launch on demand" >&2
 fi
 
-python3 -u /app/browser_service.py &
+python3 -u -m sgcc_ha_bridge.browser_service &
 SERVICE_PID="$!"
 PIDS+=("$SERVICE_PID")
 
-# Keep browser_service.py as the primary process. Optional desktop helpers
+# Keep sgcc_ha_bridge.browser_service as the primary process. Optional desktop helpers
 # (fluxbox/x11vnc/websockify) may exit on minimal hosts; they must not bring
 # down the browser manager used by Docker Compose.
 wait "$SERVICE_PID"

@@ -58,8 +58,9 @@ RUN mkdir /data \
     && rm -rf /var/log/*
 
 COPY sgcc_ha_bridge/ /app/sgcc_ha_bridge/
-COPY scripts/ /app/
-RUN chmod +x /app/docker-entrypoint.sh /app/browser-service-entrypoint.sh /app/main.py /app/browser_service.py
+COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY scripts/browser-service-entrypoint.sh /app/browser-service-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh /app/browser-service-entrypoint.sh
 
 ENV LANG=C.UTF-8
 

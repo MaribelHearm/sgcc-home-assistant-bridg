@@ -27,10 +27,16 @@ docker build --check -f Dockerfile-for-github-action .
 docker build --check -f Dockerfile.browser .
 ```
 
+Markdown 本地链接检查：
+
+```bash
+python tools/check_markdown_links.py
+```
+
 ## 目录约定
 
 - `sgcc_ha_bridge/`：核心 Python 包。
-- `scripts/`：Docker/Add-on shell 入口和旧导入路径兼容 wrapper。
+- `scripts/`：Docker/Add-on shell 入口脚本。
 - `tests/`：单元测试。
 - `tools/`：离线辅助工具。
 - `examples/`：可复制的 Home Assistant / Lovelace 示例。

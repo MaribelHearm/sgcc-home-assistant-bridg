@@ -112,10 +112,21 @@ def main() -> int:
         description="把 state_grid Lovelace YAML 里的实体字段替换成本项目字段。"
     )
     parser.add_argument("input", help="输入 Lovelace YAML 文件，使用 - 表示 stdin")
-    parser.add_argument("--account-suffix", required=True, help="本项目实体里的户号后四位，例如 4840")
-    parser.add_argument("--output", "-o", help="输出文件；不填则写 stdout")
+    parser.add_argument("output", nargs="?", help="输出文件；不填则写 stdout")
+    parser.add_argument(
+        "--account-suffix",
+        "--suffix",
+        dest="account_suffix",
+        required=True,
+        help="本项目实体里的户号后四位，例如 4840",
+    )
+    parser.add_argument("--output", "-o", dest="output_option", help="输出文件；不填则写 stdout")
     parser.add_argument("--quiet", action="store_true", help="不在 stderr 打印替换统计")
     args = parser.parse_args()
+
+    output = args.output_option or args.output
+    if args.output_option and args.output and args.output_option != args.output:
+        parser.error("output positional and --output point to different files")
 
     if args.input == "-":
         import sys
@@ -126,8 +137,8 @@ def main() -> int:
 
     out, counts = convert_text(src, args.account_suffix)
 
-    if args.output:
-        Path(args.output).write_text(out, encoding="utf-8")
+    if output:
+        Path(output).write_text(out, encoding="utf-8")
     else:
         print(out, end="")
 

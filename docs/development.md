@@ -1,33 +1,38 @@
 # 开发与仓库结构
 
-这个仓库按“可发布开源项目”整理：运行代码、兼容入口、测试、示例和文档分开存放。
+这个仓库按“可发布开源项目”整理：运行代码、部署入口、测试、示例和文档分开存放。
 
 ## 目录结构
 
 ```text
 sgcc_ha_bridge/   核心 Python 包
-scripts/          Docker/Add-on shell 入口和旧导入路径兼容 wrapper
+scripts/          Docker/Add-on shell 入口脚本
 tests/            单元测试
 tools/            离线辅助脚本
 examples/         Home Assistant / Lovelace 示例
 docs/             专题文档
 assets/           README/docs/examples 使用的图片素材
-ha_addons_doc/    Home Assistant Add-on 图文说明
-.github/          CI、issue 模板和 PR 模板
+ha_addons_doc/    Home Assistant Add-on/App 图文说明
+.github/          CI 和 PR 模板
 ```
 
-## 入口兼容
+## Python 入口
 
-历史版本把业务代码直接放在 `scripts/`。现在真实源码在 `sgcc_ha_bridge/`，但 `scripts/main.py`、`scripts/browser_service.py` 和其他同名 wrapper 仍然保留。
-
-这样旧用法仍然有效：
+业务代码只放在 `sgcc_ha_bridge/`。本地调试和容器入口都使用包模块入口：
 
 ```bash
-PYTHONPATH=scripts python -c "import main, model"
-python scripts/main.py
+python -m sgcc_ha_bridge.main
+python -m sgcc_ha_bridge.browser_service
 ```
 
-Docker/Add-on 也继续使用旧入口脚本，不影响已有部署。
+安装为 Python 包后也会提供两个 console script：
+
+```bash
+sgcc-ha-bridge
+sgcc-browser-service
+```
+
+Docker / Add-on 的 shell 包装脚本位于 `scripts/`，只负责读取 Add-on options、选择浏览器模式、启动 Xvfb/browser-service，并最终执行上面的包模块入口。
 
 ## 本地验证
 
@@ -43,6 +48,18 @@ python -m unittest discover -s tests -v
 .venv/bin/python -m pytest -q
 ```
 
+包入口导入检查：
+
+```bash
+python - <<'PY'
+import importlib
+for mod in ["sgcc_ha_bridge.main", "sgcc_ha_bridge.browser_service"]:
+    module = importlib.import_module(mod)
+    assert hasattr(module, "main")
+print("package entrypoints import ok")
+PY
+```
+
 Dockerfile 静态检查：
 
 ```bash
@@ -50,22 +67,16 @@ docker build --check -f Dockerfile-for-github-action .
 docker build --check -f Dockerfile.browser .
 ```
 
-旧导入路径兼容检查：
+Markdown 本地链接检查：
 
 ```bash
-python - <<'PY'
-import sys
-sys.path.insert(0, 'scripts')
-import main, model, browser_service
-assert main.__name__ == 'sgcc_ha_bridge.main'
-assert model.__name__ == 'sgcc_ha_bridge.model'
-assert browser_service.__name__ == 'sgcc_ha_bridge.browser_service'
-PY
+python tools/check_markdown_links.py
 ```
 
 ## 文档分工
 
 - `README.md`：项目门面、快速开始和文档索引。
 - `DOCS.md`：完整配置、部署、实体和排障说明。
+- `docs/release.md`：版本、镜像和发布检查清单。
 - `docs/`：专题文档。
 - `examples/`：可复制示例，不承诺自动安装。

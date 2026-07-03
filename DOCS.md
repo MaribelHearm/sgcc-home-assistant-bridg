@@ -317,7 +317,7 @@ SGCC_QRCODE_FALLBACK_UNATTENDED=false
 examples/lovelace-cards/sgcc-electricity-card-xiaoshi-original.yaml
 examples/lovelace-cards/sgcc-electricity-card-xiaoshi-style.yaml
 examples/lovelace-cards/sgcc-electricity-card.yaml
-examples/lovelace-sgcc-electricity.yaml
+examples/basic/lovelace-sgcc-electricity.yaml
 ```
 
 使用方式：
@@ -342,9 +342,10 @@ examples/lovelace-sgcc-electricity.yaml
 
 ## 8. 开发结构
 
-仓库结构、本地测试、旧 `scripts/` 入口兼容和贡献流程见：
+仓库结构、本地测试、发布流程和贡献流程见：
 
 - [docs/development.md](docs/development.md)
+- [docs/release.md](docs/release.md)
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 9. 常见问题与排障

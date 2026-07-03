@@ -121,13 +121,14 @@ assets/lovelace-cards/
 - [DOCS.md](DOCS.md)：完整配置、部署、实体、浏览器模式和排障。
 - [example.env](example.env)：环境变量示例。
 - [docs/development.md](docs/development.md)：仓库结构和本地开发。
+- [docs/release.md](docs/release.md)：版本、镜像和发布流程。
 - [examples/README.md](examples/README.md)：示例目录索引。
 - [CHANGELOG.md](CHANGELOG.md)：版本记录。
 - [NOTICE](NOTICE)：上游来源与版权说明。
 
 ## 开发
 
-项目源码在 `sgcc_ha_bridge/`，`scripts/` 只保留 Docker/Add-on 入口脚本和旧导入路径兼容 wrapper。
+项目源码在 `sgcc_ha_bridge/`，`scripts/` 只保留 Docker/Add-on shell 入口脚本。
 
 本地验证：
 

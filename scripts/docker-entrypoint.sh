@@ -74,7 +74,7 @@ trap cleanup EXIT
 trap on_term INT TERM
 
 run_main() {
-  python3 -u /app/main.py &
+  python3 -u -m sgcc_ha_bridge.main &
   local main_pid="$!"
   PIDS+=("$main_pid")
   wait "$main_pid"
@@ -104,7 +104,7 @@ start_embedded_browser_service() {
   mkdir -p "$SGCC_BROWSER_PROFILE"
   rm -f "$SGCC_BROWSER_PROFILE"/SingletonLock "$SGCC_BROWSER_PROFILE"/SingletonSocket "$SGCC_BROWSER_PROFILE"/SingletonCookie
 
-  python3 -u /app/browser_service.py &
+  python3 -u -m sgcc_ha_bridge.browser_service &
   local service_pid="$!"
   PIDS+=("$service_pid")
 
@@ -129,7 +129,7 @@ case "$BROWSER_MODE" in
     if [ "$(printf '%s' "$SGCC_BROWSER_SERVICE_EMBEDDED" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
       # Single-container Add-on path: keep only Xvfb + a lightweight manager
       # resident; official Google Chrome itself is launched on demand by
-      # browser_service.py and stopped after each Selenium session.
+      # sgcc_ha_bridge.browser_service and stopped after each Selenium session.
       start_xvfb
       start_embedded_browser_service
     fi

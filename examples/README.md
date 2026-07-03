@@ -4,12 +4,13 @@
 
 ## 目录
 
+- `basic/lovelace-sgcc-electricity.yaml`：偏基础的 Home Assistant Lovelace view 示例，优先使用内置 `sections`、`tile`、`entities`、`grid` 卡片。
 - `lovelace-cards/`：三套卡片预设。
   - `sgcc-electricity-card-xiaoshi-original.yaml`：消逝 / xiaoshi 原版风格预设，已替换成本项目实体字段。
   - `sgcc-electricity-card-xiaoshi-style.yaml`：消逝风格优化版，已替换成本项目实体字段。
   - `sgcc-electricity-card.yaml`：作者当前自用 Lovelace 页面导出示例，依赖 HACS 卡片。
 - `custom-cards/sgcc-electricity-card.js`：前两套卡片预设使用的前端卡片文件。
-- `lovelace-sgcc-electricity.yaml`：偏基础的 Home Assistant Lovelace view 示例。
+- `migration/`：已有 `state_grid` 仪表盘迁移说明。
 
 ## 使用前需要替换
 
@@ -37,4 +38,4 @@ examples/custom-cards/sgcc-electricity-card.js
 python tools/convert_state_grid_lovelace.py input.yaml output.yaml --suffix 4840
 ```
 
-说明见 [../docs/state-grid-lovelace-migration.md](../docs/state-grid-lovelace-migration.md)。
+说明见 [migration/README.md](migration/README.md) 和 [../docs/state-grid-lovelace-migration.md](../docs/state-grid-lovelace-migration.md)。

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 整理仓库结构：移除 `scripts/` Python 兼容 wrapper，Docker/Add-on/镜像入口统一使用 `sgcc_ha_bridge` 包模块。
+- 整理 examples、开发文档和发布文档，补充 Markdown 本地链接检查。
+
 ## [v0.1.4] - 2026-06-30
 
 ### Fixed
