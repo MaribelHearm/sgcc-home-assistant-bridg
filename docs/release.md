@@ -4,8 +4,8 @@
 
 发布前保持这些位置一致：
 
-- `pyproject.toml`：Python 包版本，例如 `0.1.4`。
-- `config.yaml`：Home Assistant Add-on/App 版本，例如 `v0.1.4`。
+- `pyproject.toml`：Python 包版本，例如 `0.1.5`。
+- `config.yaml`：Home Assistant Add-on/App 版本，例如 `v0.1.5`。
 - `CHANGELOG.md` / `DOCS.md` / `ha_addons_doc/`：对外文档中的版本说明。
 
 ## CI 输出
@@ -32,7 +32,7 @@ ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser
 latest
 main
 sha-xxxxxxx
-v0.1.4
+v0.1.5
 ```
 
 Aliyun ACR 使用同一个公开仓库，browser-service 镜像使用 `browser-*` 前缀：
@@ -41,11 +41,11 @@ Aliyun ACR 使用同一个公开仓库，browser-service 镜像使用 `browser-*
 latest
 main
 sha-xxxxxxx
-v0.1.4
+v0.1.5
 browser-latest
 browser-main
 browser-sha-xxxxxxx
-browser-v0.1.4
+browser-v0.1.5
 ```
 
 ## 发布检查清单
