@@ -186,6 +186,8 @@ class DataFetcher:
                 cache_args = account_data_to_update_args(account_data)
                 logging.info(
                     f"用户 [{masked_user_id}] 数据获取完成: 余额={update_args['balance']}元, "
+                    f"预付费余额={update_args['prepay_balance']}元, "
+                    f"应交金额={update_args['arrears']}元, "
                     f"最近日用电={update_args['last_daily_usage']}度({update_args['last_daily_date']}), "
                     f"年度用电={update_args['yearly_usage']}度, 年度电费={update_args['yearly_charge']}元, "
                     f"月用电={update_args['month_usage']}度, 月电费={update_args['month_charge']}元")

@@ -3,7 +3,7 @@ import sys
 import unittest
 
 
-from sgcc_ha_bridge.ha_mapping import account_data_to_update_args, with_history_daily_if_empty
+from sgcc_ha_bridge.ha_mapping import account_data_summary, account_data_to_update_args, with_history_daily_if_empty
 from sgcc_ha_bridge.model import Account, AccountData, Balance, DailyReading
 
 
@@ -47,6 +47,23 @@ class HistoryDailyBackfillTestCase(unittest.TestCase):
 
 
 class BalanceMappingTestCase(unittest.TestCase):
+    def test_account_data_summary_shows_balance_field_availability(self):
+        account_data = AccountData(
+            account=Account(account_no="1234567890123"),
+            balance=Balance(
+                account_no="1234567890123",
+                observed_at="2026-07-06T05:16:28+08:00",
+                balance_cny=None,
+                prepay_balance_cny=155.31,
+                arrears_cny=None,
+            ),
+        )
+
+        self.assertIn(
+            "balance=yes(amount=no, prepay=yes, arrears=no)",
+            account_data_summary(account_data),
+        )
+
     def test_prepay_balance_is_not_published_as_charge_balance(self):
         account_data = AccountData(
             account=Account(account_no="1234567890123"),

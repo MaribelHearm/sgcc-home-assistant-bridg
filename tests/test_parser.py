@@ -70,6 +70,55 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(data.daily[0].date, "2026-06-17")
         self.assertEqual(data.daily[0].peak_usage_kwh, 3.0)
 
+    def test_parse_balance_prefers_scalar_amount_over_parent_container(self):
+        store = {
+            "state": {
+                "account": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                "balance": {
+                    "consNo": "1234567890123",
+                    "amtTime": "2026-07-06 05:16:28",
+                    "remainBalance": "155.31元",
+                },
+            }
+        }
+
+        data = parse_account_data(store=store)
+
+        self.assertEqual(data.balance.observed_at, "2026-07-06 05:16:28")
+        self.assertEqual(data.balance.balance_cny, 155.31)
+
+    def test_empty_balance_container_does_not_mark_page_ready(self):
+        data = parse_account_data(
+            store={
+                "state": {
+                    "account": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "balance": {},
+                }
+            }
+        )
+
+        self.assertIsNone(data.balance)
+
+    def test_parse_balance_from_label_value_rows(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [
+                        {"label": "账户余额", "value": "155.31元"},
+                        {"label": "预付费余额", "value": "12.34"},
+                        {"label": "应交金额", "value": "0.00"},
+                    ],
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.balance.balance_cny, 155.31)
+        self.assertEqual(data.balance.prepay_balance_cny, 12.34)
+        self.assertEqual(data.balance.arrears_cny, 0.0)
+
     def test_merge_account_data_fills_masked_account_numbers(self):
         first = parse_account_data(store={"masked": "*********0123"})
         second = parse_account_data(

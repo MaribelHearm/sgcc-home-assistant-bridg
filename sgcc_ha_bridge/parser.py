@@ -16,6 +16,67 @@ from .model import Account, AccountData, Balance, DailyReading, MonthlyReading, 
 _ACCOUNT_RE = re.compile(r"(?<!\d)(\d{13})(?!\d)")
 _MASKED_ACCOUNT_RE = re.compile(r"\*+(\d{4})$")
 
+_BALANCE_KEYS = (
+    "accountBalance",
+    "accountBal",
+    "accountBalanceAmt",
+    "acctBal",
+    "acctBalance",
+    "acctBalanceAmt",
+    "balance",
+    "balanceAmt",
+    "bal",
+    "availableBalance",
+    "availableBal",
+    "currentBalance",
+    "curBalance",
+    "remainBalance",
+    "remainingBalance",
+    "surplusBalance",
+    "surplusAmt",
+    "userBalance",
+    "账户余额",
+    "电费余额",
+    "当前余额",
+    "余额",
+    "账户结余",
+    "结余金额",
+)
+_PREPAY_BALANCE_KEYS = (
+    "prepayBal",
+    "prepayBalance",
+    "prepay_balance",
+    "prepayAmt",
+    "prepaidBalance",
+    "prepaidBal",
+    "prepaidAmt",
+    "prepaymentBalance",
+    "advanceBalance",
+    "advanceAmt",
+    "预付费余额",
+    "预存余额",
+    "预存电费",
+)
+_ARREARS_KEYS = (
+    "historyOwe",
+    "arrears",
+    "amountDue",
+    "oweAmt",
+    "oweAmount",
+    "oweFee",
+    "oweBalance",
+    "payableAmt",
+    "needPayAmt",
+    "totalOwe",
+    "欠费",
+    "欠费金额",
+    "应交金额",
+    "待缴金额",
+)
+_BALANCE_TIME_KEYS = ("amtTime", "date", "time", "dataTime", "updateTime", "asOfTime")
+_LABEL_KEYS = ("label", "name", "title", "text", "itemName", "fieldName", "field", "desc", "caption")
+_VALUE_KEYS = ("value", "val", "amount", "amt", "money", "fee", "num", "number", "content", "text")
+
 
 def parse_account_data(
     store: Optional[dict[str, Any]] = None,
@@ -172,10 +233,16 @@ def _pick_account_no(values: list[Any], account_obj: dict[str, Any]) -> str:
 
 
 def _pick_balance_obj(values: list[Any]) -> dict[str, Any]:
-    preferred_keys = ("historyOwe", "accountBalance", "prepayBal", "prepayBalance", "amtTime")
+    amount_keys = _BALANCE_KEYS + _PREPAY_BALANCE_KEYS + _ARREARS_KEYS
+    selected: dict[str, Any] = {}
     for value in values:
-        if isinstance(value, dict) and any(k in value for k in preferred_keys):
-            return value
+        if not isinstance(value, dict):
+            continue
+        normalized = _normalize_balance_obj(value)
+        if _has_any_float(normalized, amount_keys):
+            selected = _merge_balance_obj(selected, normalized)
+    if selected:
+        return selected
     return {}
 
 
@@ -187,14 +254,49 @@ def _pick_power_obj(values: list[Any]) -> dict[str, Any]:
 
 
 def _parse_balance(raw: dict[str, Any], account_no: str, observed_at: str) -> Balance:
+    raw = _normalize_balance_obj(raw)
     account_no = account_no or _extract_account_no(raw.get("consNo")) or _extract_account_no(raw.get("consNo_dst"))
     return Balance(
         account_no=account_no,
-        observed_at=str(raw.get("amtTime") or raw.get("date") or observed_at),
-        balance_cny=_first_float(raw, "accountBalance", "balance", "acctBal", "accountBal"),
-        prepay_balance_cny=_first_float(raw, "prepayBal", "prepayBalance", "prepay_balance", "prepayAmt"),
-        arrears_cny=_first_float(raw, "historyOwe", "arrears", "amountDue", "oweAmt"),
+        observed_at=str(_pick_first_value(raw, *_BALANCE_TIME_KEYS) or observed_at),
+        balance_cny=_first_float(raw, *_BALANCE_KEYS),
+        prepay_balance_cny=_first_float(raw, *_PREPAY_BALANCE_KEYS),
+        arrears_cny=_first_float(raw, *_ARREARS_KEYS),
     )
+
+
+def _normalize_balance_obj(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return raw balance-like data plus synthetic keys from label/value rows."""
+    normalized = dict(raw)
+    label_values = _balance_values_from_label_row(raw)
+    for key, value in label_values.items():
+        normalized.setdefault(key, value)
+    return normalized
+
+
+def _merge_balance_obj(base: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in candidate.items():
+        if key not in merged or merged.get(key) in (None, ""):
+            merged[key] = value
+    return merged
+
+
+def _balance_values_from_label_row(raw: dict[str, Any]) -> dict[str, Any]:
+    label = _pick_first_text(raw, *_LABEL_KEYS)
+    if not label:
+        return {}
+    value = _pick_first_value(raw, *_VALUE_KEYS)
+    if _safe_float(value) is None:
+        return {}
+
+    if any(keyword in label for keyword in ("预付", "预存")):
+        return {"prepayBalance": value}
+    if any(keyword in label for keyword in ("欠费", "应交", "待缴", "待交")):
+        return {"historyOwe": value}
+    if "余额" in label or "结余" in label:
+        return {"accountBalance": value}
+    return {}
 
 
 def _parse_yearly(power_obj: dict[str, Any], account_no: str) -> Optional[YearlyReading]:
@@ -333,6 +435,17 @@ def _pick_first_text(obj: dict[str, Any], *keys: str) -> str:
     return ""
 
 
+def _pick_first_value(obj: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in obj and obj.get(key) not in (None, ""):
+            return obj.get(key)
+    return None
+
+
+def _has_any_float(obj: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    return any(_first_float(obj, key) is not None for key in keys)
+
+
 def _first_float(obj: dict[str, Any], *keys: str) -> Optional[float]:
     for key in keys:
         if key in obj:
@@ -344,6 +457,8 @@ def _first_float(obj: dict[str, Any], *keys: str) -> Optional[float]:
 
 def _safe_float(value: Any) -> Optional[float]:
     if value is None:
+        return None
+    if isinstance(value, (dict, list, tuple, set)):
         return None
     try:
         text = str(value).strip().replace(",", "")

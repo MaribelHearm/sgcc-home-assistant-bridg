@@ -25,8 +25,19 @@ def _range_text(values: list[str]) -> str:
 def account_data_summary(account_data: AccountData) -> str:
     daily_range = _range_text([row.date for row in account_data.daily])
     monthly_range = _range_text([row.year_month for row in account_data.monthly])
+    balance_model = account_data.balance
+    if balance_model is None:
+        balance_text = "balance=no"
+    else:
+        balance_text = (
+            "balance=yes("
+            f"amount={'yes' if balance_model.balance_cny is not None else 'no'}, "
+            f"prepay={'yes' if balance_model.prepay_balance_cny is not None else 'no'}, "
+            f"arrears={'yes' if balance_model.arrears_cny is not None else 'no'}"
+            ")"
+        )
     return (
-        f"balance={'yes' if account_data.balance else 'no'}, "
+        f"{balance_text}, "
         f"daily={len(account_data.daily)}({daily_range}), "
         f"monthly={len(account_data.monthly)}({monthly_range}), "
         f"yearly={'yes' if account_data.yearly else 'no'}"
