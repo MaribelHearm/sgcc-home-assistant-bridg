@@ -99,6 +99,26 @@ class ParserTestCase(unittest.TestCase):
 
         self.assertIsNone(data.balance)
 
+    def test_parse_balance_from_user_acc_component_local_fields(self):
+        components = [
+            {
+                "data": {
+                    "accountNo": "*********9976",
+                    "address": "*****",
+                    "queryTime": "2026-07-06 18:20:00",
+                    "accountBalance": "23.46元",
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.account.account_no, "*********9976")
+        self.assertEqual(data.balance.account_no, "*********9976")
+        self.assertEqual(data.balance.observed_at, "2026-07-06 18:20:00")
+        self.assertEqual(data.balance.balance_cny, 23.46)
+        self.assertIsNone(data.balance.prepay_balance_cny)
+
     def test_parse_balance_from_label_value_rows(self):
         components = [
             {

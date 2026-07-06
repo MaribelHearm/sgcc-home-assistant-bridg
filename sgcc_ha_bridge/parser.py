@@ -73,7 +73,7 @@ _ARREARS_KEYS = (
     "应交金额",
     "待缴金额",
 )
-_BALANCE_TIME_KEYS = ("amtTime", "date", "time", "dataTime", "updateTime", "asOfTime")
+_BALANCE_TIME_KEYS = ("amtTime", "queryTime", "date", "time", "dataTime", "updateTime", "asOfTime")
 _LABEL_KEYS = ("label", "name", "title", "text", "itemName", "fieldName", "field", "desc", "caption")
 _VALUE_KEYS = ("value", "val", "amount", "amt", "money", "fee", "num", "number", "content", "text")
 

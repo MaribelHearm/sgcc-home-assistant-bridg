@@ -37,7 +37,21 @@ const wantedKeys = [
   'NewtotalBillProvince',
   'optionalYearArray',
   'selectYear',
-  'listData'
+  'listData',
+  // 余额页 userAcc.vue 在部分省份会把当前余额放在组件本地字段，
+  // 不一定进入 mixinGetYuEdata/consInfoobj 等旧字段。
+  'accountBalance',
+  'accountBal',
+  'accountBalanceAmt',
+  'currentBalance',
+  'remainBalance',
+  'remainingBalance',
+  'userBalance',
+  'queryTime',
+  'amtTime',
+  'accountNo',
+  'acctNo',
+  'address'
 ];
 return Array.from(document.querySelectorAll('*'))
   .map((el, index) => {
