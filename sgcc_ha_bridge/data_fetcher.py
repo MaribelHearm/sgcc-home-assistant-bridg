@@ -3,6 +3,7 @@ import os
 import random
 import threading
 import time
+from typing import Optional
 
 from .browser import build_driver, release_driver
 from .cache_validity import has_useful_account_data
