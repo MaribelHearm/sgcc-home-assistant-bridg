@@ -6,7 +6,7 @@ This module deliberately does not import selenium or touch the browser.
 from __future__ import annotations
 
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
@@ -104,6 +104,12 @@ _HISTORICAL_BALANCE_LABEL_TERMS = (
 )
 
 _DIRECT_AMOUNT_KEYS = _BALANCE_KEYS + _PREPAY_BALANCE_KEYS + _ARREARS_KEYS
+
+
+@dataclass(frozen=True)
+class _BalanceCandidate:
+    priority: int
+    data: dict[str, Any]
 
 
 def parse_account_data(
@@ -266,26 +272,21 @@ def _pick_balance_obj(values: list[Any]) -> dict[str, Any]:
     Compatibility rules here must be backed by real SGCC_MONEY_DIAG evidence.
     Diagnostics can be broad; the parser stays narrow and explainable.
     """
-    candidates: list[tuple[int, int, dict[str, Any]]] = []
+    candidates: list[tuple[int, int, int, dict[str, Any]]] = []
     for index, value in enumerate(values):
-        if isinstance(value, list):
-            label_group = _balance_values_from_label_rows(value)
-            if _has_any_float(label_group, _DIRECT_AMOUNT_KEYS):
-                candidates.append((_label_balance_candidate_priority(label_group), index, label_group))
-            continue
-        if not isinstance(value, dict):
-            continue
-
-        normalized = _normalize_balance_obj(value)
-        priority = _balance_candidate_priority(value)
-        if priority > 0:
-            candidates.append((priority, index, normalized))
-            continue
+        candidate = _classify_balance_candidate(value)
+        if candidate is not None:
+            candidates.append((
+                candidate.priority,
+                _balance_candidate_quality(candidate.data),
+                index,
+                candidate.data,
+            ))
 
     if not candidates:
         return {}
-    # Highest priority wins; keep original traversal order for equal priority.
-    return min(candidates, key=lambda item: (-item[0], item[1]))[2]
+    # Highest priority wins, then better same-source context, then traversal order.
+    return min(candidates, key=lambda item: (-item[0], -item[1], item[2]))[3]
 
 
 def _pick_power_obj(values: list[Any]) -> dict[str, Any]:
@@ -296,7 +297,6 @@ def _pick_power_obj(values: list[Any]) -> dict[str, Any]:
 
 
 def _parse_balance(raw: dict[str, Any], account_no: str, observed_at: str) -> Balance:
-    raw = _normalize_balance_obj(raw)
     account_no = account_no or _extract_account_no(raw.get("consNo")) or _extract_account_no(raw.get("consNo_dst"))
     return Balance(
         account_no=account_no,
@@ -312,19 +312,43 @@ def _normalize_balance_obj(raw: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(raw)
     for key, value in _balance_values_from_known_structures(raw).items():
         normalized.setdefault(key, value)
-    for key, value in _balance_values_from_legacy_aliases(raw).items():
+    for key, value in _money_values_from_legacy_aliases(raw).items():
         normalized.setdefault(key, value)
     return normalized
 
 
-def _balance_candidate_priority(raw: dict[str, Any]) -> int:
-    if _balance_values_from_known_structures(raw):
-        return 100
-    if _is_confirmed_account_balance_source(raw):
-        return 90
-    if _is_legacy_balance_alias_source(raw):
-        return 80
-    return 0
+def _classify_balance_candidate(value: Any) -> Optional[_BalanceCandidate]:
+    if isinstance(value, list):
+        label_group = _balance_values_from_label_rows(value)
+        if _has_any_float(label_group, _DIRECT_AMOUNT_KEYS):
+            return _BalanceCandidate(_label_balance_candidate_priority(label_group), label_group)
+        return None
+
+    if not isinstance(value, dict):
+        return None
+
+    if _balance_values_from_known_structures(value):
+        return _BalanceCandidate(100, _normalize_balance_obj(value))
+    if _is_confirmed_account_balance_source(value):
+        return _BalanceCandidate(90, _normalize_balance_obj(value))
+    if _is_legacy_balance_alias_source(value):
+        return _BalanceCandidate(80, _normalize_balance_obj(value))
+    return None
+
+
+def _balance_candidate_quality(candidate: dict[str, Any]) -> int:
+    quality = 0
+    if any(key in candidate for key in _ACCOUNT_CONTEXT_KEYS):
+        quality += 4
+    if any(key in candidate for key in _BALANCE_TIME_KEYS):
+        quality += 2
+    if _first_float(candidate, *_BALANCE_KEYS) is not None:
+        quality += 1
+    if _first_float(candidate, *_PREPAY_BALANCE_KEYS) is not None:
+        quality += 1
+    if _first_float(candidate, *_ARREARS_KEYS) is not None:
+        quality += 1
+    return quality
 
 
 def _is_confirmed_account_balance_source(raw: dict[str, Any]) -> bool:
@@ -363,7 +387,7 @@ def _is_confirmed_sum_money_balance(raw: dict[str, Any]) -> bool:
     )
 
 
-def _balance_values_from_legacy_aliases(raw: dict[str, Any]) -> dict[str, Any]:
+def _money_values_from_legacy_aliases(raw: dict[str, Any]) -> dict[str, Any]:
     """Map old guessed aliases only when the source still looks like a balance payload."""
     if not _has_legacy_balance_source_context(raw):
         return {}

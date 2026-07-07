@@ -166,7 +166,10 @@ class Scraper:
         except Exception:
             store = {}
         try:
-            components = vue_state.selected_vue_data(self.driver) or []
+            components = vue_state.selected_vue_data(
+                self.driver,
+                include_money_diag=money_diag_enabled(),
+            ) or []
         except Exception:
             components = []
         return {"store": store, "components": components, "url": self.driver.current_url}
