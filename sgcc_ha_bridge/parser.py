@@ -17,15 +17,21 @@ _ACCOUNT_RE = re.compile(r"(?<!\d)(\d{13})(?!\d)")
 _MASKED_ACCOUNT_RE = re.compile(r"\*+(\d{4})$")
 
 _BALANCE_KEYS = (
+    # Confirmed structured current-balance fields. Keep this list small: new
+    # aliases should come from SGCC_MONEY_DIAG evidence, not guesses.
     "accountBalance",
+)
+_LEGACY_BALANCE_ALIAS_KEYS = (
+    # Quarantined compatibility aliases from older releases.  They are only
+    # accepted from the same dict as account/time context, never by merging the
+    # whole Vue tree.  This keeps plausible old guesses working without making
+    # every money-like field a first-class parser contract.
     "accountBal",
     "accountBalanceAmt",
     "acctBal",
     "acctBalance",
     "acctBalanceAmt",
-    "balance",
     "balanceAmt",
-    "bal",
     "availableBalance",
     "availableBal",
     "currentBalance",
@@ -38,13 +44,14 @@ _BALANCE_KEYS = (
     "账户余额",
     "电费余额",
     "当前余额",
-    "余额",
     "账户结余",
     "结余金额",
 )
 _PREPAY_BALANCE_KEYS = (
     "prepayBal",
     "prepayBalance",
+)
+_LEGACY_PREPAY_BALANCE_ALIAS_KEYS = (
     "prepay_balance",
     "prepayAmt",
     "prepaidBalance",
@@ -59,6 +66,8 @@ _PREPAY_BALANCE_KEYS = (
 )
 _ARREARS_KEYS = (
     "historyOwe",
+)
+_LEGACY_ARREARS_ALIAS_KEYS = (
     "arrears",
     "amountDue",
     "oweAmt",
@@ -73,9 +82,28 @@ _ARREARS_KEYS = (
     "应交金额",
     "待缴金额",
 )
-_BALANCE_TIME_KEYS = ("amtTime", "queryTime", "date", "time", "dataTime", "updateTime", "asOfTime")
-_LABEL_KEYS = ("label", "name", "title", "text", "itemName", "fieldName", "field", "desc", "caption")
-_VALUE_KEYS = ("value", "val", "amount", "amt", "money", "fee", "num", "number", "content", "text")
+_BALANCE_TIME_KEYS = ("amtTime", "queryTime")
+_LABEL_KEYS = ("label",)
+_VALUE_KEYS = ("value",)
+_ACCOUNT_CONTEXT_KEYS = ("consNo", "consNo_dst", "accountNo", "acctNo", "user_id", "userId", "selectValue")
+_BALANCE_CONTEXT_KEYS = _ACCOUNT_CONTEXT_KEYS + _BALANCE_TIME_KEYS + ("elecAddr", "elecAddr_dst", "address")
+
+_EXPLICIT_ACCOUNT_BALANCE_LABELS = ("账户余额",)
+_EXPLICIT_PREPAY_BALANCE_LABELS = ("预付费余额",)
+_EXPLICIT_ARREARS_LABELS = ("应交金额",)
+_HISTORICAL_BALANCE_LABEL_TERMS = (
+    "上月",
+    "上期",
+    "上次",
+    "期初",
+    "上年",
+    "去年",
+    "previous",
+    "prev",
+    "last",
+)
+
+_DIRECT_AMOUNT_KEYS = _BALANCE_KEYS + _PREPAY_BALANCE_KEYS + _ARREARS_KEYS
 
 
 def parse_account_data(
@@ -233,17 +261,31 @@ def _pick_account_no(values: list[Any], account_obj: dict[str, Any]) -> str:
 
 
 def _pick_balance_obj(values: list[Any]) -> dict[str, Any]:
-    amount_keys = _BALANCE_KEYS + _PREPAY_BALANCE_KEYS + _ARREARS_KEYS
-    selected: dict[str, Any] = {}
-    for value in values:
+    """Pick one well-scoped balance source instead of merging the whole tree.
+
+    Compatibility rules here must be backed by real SGCC_MONEY_DIAG evidence.
+    Diagnostics can be broad; the parser stays narrow and explainable.
+    """
+    candidates: list[tuple[int, int, dict[str, Any]]] = []
+    for index, value in enumerate(values):
+        if isinstance(value, list):
+            label_group = _balance_values_from_label_rows(value)
+            if _has_any_float(label_group, _DIRECT_AMOUNT_KEYS):
+                candidates.append((_label_balance_candidate_priority(label_group), index, label_group))
+            continue
         if not isinstance(value, dict):
             continue
+
         normalized = _normalize_balance_obj(value)
-        if _has_any_float(normalized, amount_keys):
-            selected = _merge_balance_obj(selected, normalized)
-    if selected:
-        return selected
-    return {}
+        priority = _balance_candidate_priority(value)
+        if priority > 0:
+            candidates.append((priority, index, normalized))
+            continue
+
+    if not candidates:
+        return {}
+    # Highest priority wins; keep original traversal order for equal priority.
+    return min(candidates, key=lambda item: (-item[0], item[1]))[2]
 
 
 def _pick_power_obj(values: list[Any]) -> dict[str, Any]:
@@ -266,48 +308,150 @@ def _parse_balance(raw: dict[str, Any], account_no: str, observed_at: str) -> Ba
 
 
 def _normalize_balance_obj(raw: dict[str, Any]) -> dict[str, Any]:
-    """Return raw balance-like data plus synthetic keys from label/value rows."""
+    """Return direct balance-like data plus confirmed structured mappings."""
     normalized = dict(raw)
     for key, value in _balance_values_from_known_structures(raw).items():
         normalized.setdefault(key, value)
-    for key, value in _balance_values_from_label_row(raw).items():
+    for key, value in _balance_values_from_legacy_aliases(raw).items():
         normalized.setdefault(key, value)
     return normalized
 
 
-def _merge_balance_obj(base: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
-    merged = dict(base)
-    for key, value in candidate.items():
-        if key not in merged or merged.get(key) in (None, ""):
-            merged[key] = value
-    return merged
+def _balance_candidate_priority(raw: dict[str, Any]) -> int:
+    if _balance_values_from_known_structures(raw):
+        return 100
+    if _is_confirmed_account_balance_source(raw):
+        return 90
+    if _is_legacy_balance_alias_source(raw):
+        return 80
+    return 0
+
+
+def _is_confirmed_account_balance_source(raw: dict[str, Any]) -> bool:
+    if _first_float(raw, *_BALANCE_KEYS) is None:
+        return False
+    return _has_balance_source_context(raw)
+
+
+def _is_legacy_balance_alias_source(raw: dict[str, Any]) -> bool:
+    if _first_float(raw, *_LEGACY_BALANCE_ALIAS_KEYS) is None:
+        return False
+    return _has_legacy_balance_source_context(raw)
+
+
+def _label_balance_candidate_priority(candidate: dict[str, Any]) -> int:
+    if _first_float(candidate, *_BALANCE_KEYS) is not None:
+        return 85
+    if _first_float(candidate, *_PREPAY_BALANCE_KEYS) is not None:
+        return 75
+    if _first_float(candidate, *_ARREARS_KEYS) is not None:
+        return 65
+    return 0
 
 
 def _balance_values_from_known_structures(raw: dict[str, Any]) -> dict[str, Any]:
     """Map confirmed SGCC structured fields to the normalized balance shape."""
-    if (
-        _safe_float(raw.get("sumMoney")) is not None
-        and any(key in raw for key in ("prepayBal", "historyOwe", "estiAmt"))
-    ):
+    if _is_confirmed_sum_money_balance(raw):
         return {"accountBalance": raw.get("sumMoney")}
     return {}
 
 
+def _is_confirmed_sum_money_balance(raw: dict[str, Any]) -> bool:
+    return (
+        _safe_float(raw.get("sumMoney")) is not None
+        and any(key in raw for key in ("prepayBal", "historyOwe", "estiAmt"))
+    )
+
+
+def _balance_values_from_legacy_aliases(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map old guessed aliases only when the source still looks like a balance payload."""
+    if not _has_legacy_balance_source_context(raw):
+        return {}
+
+    has_current_balance = (
+        _first_float(raw, *_BALANCE_KEYS) is not None
+        or _is_confirmed_sum_money_balance(raw)
+        or _first_float(raw, *_LEGACY_BALANCE_ALIAS_KEYS) is not None
+    )
+    if not has_current_balance:
+        return {}
+
+    mapped: dict[str, Any] = {}
+    balance_value = _pick_first_value(raw, *_LEGACY_BALANCE_ALIAS_KEYS)
+    if _safe_float(balance_value) is not None:
+        mapped["accountBalance"] = balance_value
+
+    prepay_value = _pick_first_value(raw, *_LEGACY_PREPAY_BALANCE_ALIAS_KEYS)
+    if _safe_float(prepay_value) is not None:
+        mapped["prepayBalance"] = prepay_value
+
+    arrears_value = _pick_first_value(raw, *_LEGACY_ARREARS_ALIAS_KEYS)
+    if _safe_float(arrears_value) is not None:
+        mapped["historyOwe"] = arrears_value
+
+    return mapped
+
+
+def _has_balance_source_context(raw: dict[str, Any]) -> bool:
+    return any(key in raw for key in _BALANCE_CONTEXT_KEYS)
+
+
+def _has_legacy_balance_source_context(raw: dict[str, Any]) -> bool:
+    # Legacy aliases are less certain than accountBalance/sumMoney, so require
+    # account or timestamp context from the same dict.  Address-only context is
+    # kept for confirmed accountBalance but not for guessed aliases.
+    return any(key in raw for key in _ACCOUNT_CONTEXT_KEYS + _BALANCE_TIME_KEYS)
+
+
+def _balance_values_from_label_rows(rows: list[Any]) -> dict[str, Any]:
+    """Narrow fallback for a single label/value list container."""
+    selected: dict[str, Any] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for key, value in _balance_values_from_label_row(row).items():
+            selected.setdefault(key, value)
+    # Label rows are only a narrow fallback for one explicit current-balance
+    # list. Prepay/arrears labels may supplement that list, not create one.
+    if _first_float(selected, *_BALANCE_KEYS) is None:
+        return {}
+    return selected
+
+
 def _balance_values_from_label_row(raw: dict[str, Any]) -> dict[str, Any]:
+    """Parse only explicit, debug-confirmed balance labels.
+
+    Do not treat generic "余额/结余" as current balance. Historical labels such
+    as 上月余额/期初结余 are intentionally ignored.
+    """
     label = _pick_first_text(raw, *_LABEL_KEYS)
-    if not label:
+    if not label or _is_historical_balance_label(label):
         return {}
     value = _pick_first_value(raw, *_VALUE_KEYS)
     if _safe_float(value) is None:
         return {}
 
-    if any(keyword in label for keyword in ("预付", "预存")):
+    if _label_matches(label, _EXPLICIT_PREPAY_BALANCE_LABELS):
         return {"prepayBalance": value}
-    if any(keyword in label for keyword in ("欠费", "应交", "待缴", "待交")):
+    if _label_matches(label, _EXPLICIT_ARREARS_LABELS):
         return {"historyOwe": value}
-    if "余额" in label or "结余" in label:
+    if _label_matches(label, _EXPLICIT_ACCOUNT_BALANCE_LABELS):
         return {"accountBalance": value}
     return {}
+
+
+def _is_historical_balance_label(label: str) -> bool:
+    folded = str(label).casefold()
+    return any(term.casefold() in folded for term in _HISTORICAL_BALANCE_LABEL_TERMS)
+
+
+def _label_matches(label: str, terms: tuple[str, ...]) -> bool:
+    normalized = _normalize_label(label)
+    return any(normalized == _normalize_label(term) for term in terms)
+
+
+def _normalize_label(label: str) -> str:
+    return re.sub(r"\s+", "", str(label)).rstrip(":：")
 
 
 def _parse_yearly(power_obj: dict[str, Any], account_no: str) -> Optional[YearlyReading]:

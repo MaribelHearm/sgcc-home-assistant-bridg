@@ -77,7 +77,7 @@ class ParserTestCase(unittest.TestCase):
                 "balance": {
                     "consNo": "1234567890123",
                     "amtTime": "2026-07-06 05:16:28",
-                    "remainBalance": "155.31元",
+                    "accountBalance": "155.31元",
                 },
             }
         }
@@ -166,6 +166,24 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(data.balance.prepay_balance_cny, 0.0)
         self.assertEqual(data.balance.arrears_cny, 0.0)
 
+    def test_prepay_and_arrears_without_confirmed_sum_money_context_are_not_balance(self):
+        components = [
+            {
+                "data": {
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567890016",
+                        "amtTime": "2026-07-07 05:15:50",
+                        "historyOwe": "0",
+                        "prepayBal": "217.70",
+                    }
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
     def test_sum_money_without_mixin_yue_context_is_not_balance(self):
         components = [{"data": {"summary": {"sumMoney": "999.99"}}}]
 
@@ -193,12 +211,193 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(data.balance.prepay_balance_cny, 12.34)
         self.assertEqual(data.balance.arrears_cny, 0.0)
 
+    def test_historical_balance_label_is_not_current_balance(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [
+                        {"label": "上月余额", "value": "86.44元"},
+                        {"label": "期初结余", "value": "12.34元"},
+                    ],
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
+    def test_bare_account_balance_without_context_is_not_parsed(self):
+        data = parse_account_data(store={"state": {"unrelated": {"accountBalance": "155.31元"}}})
+
+        self.assertIsNone(data.balance)
+
+    def test_arrears_label_without_current_balance_does_not_create_balance(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [{"label": "应交金额", "value": "0.00"}],
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
+    def test_unconfirmed_balance_aliases_are_not_parsed(self):
+        for key in ("balance", "remainBalance", "acctBal", "accountBal"):
+            with self.subTest(key=key):
+                data = parse_account_data(
+                    store={
+                        "state": {
+                            "account": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                            "balance": {key: "155.31元"},
+                        }
+                    }
+                )
+
+                self.assertIsNone(data.balance)
+
+    def test_legacy_balance_alias_with_same_source_context_is_still_supported(self):
+        store = {
+            "state": {
+                "balance": {
+                    "consNo": "1234567890123",
+                    "amtTime": "2026-07-06 05:16:28",
+                    "remainBalance": "155.31元",
+                    "prepaidBalance": "12.34",
+                    "amountDue": "0.00",
+                }
+            }
+        }
+
+        data = parse_account_data(store=store)
+
+        self.assertEqual(data.balance.account_no, "1234567890123")
+        self.assertEqual(data.balance.observed_at, "2026-07-06 05:16:28")
+        self.assertEqual(data.balance.balance_cny, 155.31)
+        self.assertEqual(data.balance.prepay_balance_cny, 12.34)
+        self.assertEqual(data.balance.arrears_cny, 0.0)
+
+    def test_generic_balance_alias_is_not_parsed_even_with_context(self):
+        store = {
+            "state": {
+                "balance": {
+                    "consNo": "1234567890123",
+                    "amtTime": "2026-07-06 05:16:28",
+                    "balance": "155.31元",
+                }
+            }
+        }
+
+        data = parse_account_data(store=store)
+
+        self.assertIsNone(data.balance)
+
+    def test_label_match_is_exact_after_normalization(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [{"label": "账户余额(上月)", "value": "155.31元"}],
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
+    def test_generic_balance_label_is_not_enough_without_debug_confirmed_wording(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [{"label": "余额", "value": "155.31元"}],
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
+    def test_current_and_historical_labels_in_same_list_keep_current_only(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [
+                        {"label": "上月余额", "value": "86.44元"},
+                        {"label": "账户余额", "value": "155.31元"},
+                    ],
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.balance.balance_cny, 155.31)
+
+    def test_explicit_current_balance_label_beats_unrelated_arrears_only_source(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [{"label": "账户余额", "value": "155.31元"}],
+                    "unrelatedFee": {"historyOwe": "0.00"},
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.balance.balance_cny, 155.31)
+        self.assertIsNone(data.balance.arrears_cny)
+
+    def test_single_yue_money_field_with_context_is_not_a_balance_candidate(self):
+        for key in ("historyOwe", "prepayBal"):
+            with self.subTest(key=key):
+                data = parse_account_data(
+                    components=[
+                        {
+                            "data": {
+                                "feeSummary": {
+                                    "consNo": "1234567890123",
+                                    "amtTime": "2026-07-07 05:15:50",
+                                    key: "0.00",
+                                }
+                            }
+                        }
+                    ]
+                )
+
+                self.assertIsNone(data.balance)
+
+    def test_unrelated_money_source_is_not_a_balance_candidate(self):
+        components = [
+            {
+                "data": {
+                    "consInfo": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                    "listData": [{"label": "上月余额", "value": "86.44元"}],
+                    "unrelatedFee": {"historyOwe": "0.00"},
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
     def test_merge_account_data_fills_masked_account_numbers(self):
         first = parse_account_data(store={"masked": "*********0123"})
         second = parse_account_data(
             store={
                 "account": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
-                "balance": {"accountBalance": "10.5"},
+                "balance": {"consNo": "1234567890123", "accountBalance": "10.5"},
             }
         )
 
