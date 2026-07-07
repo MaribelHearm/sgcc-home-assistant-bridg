@@ -10,7 +10,6 @@ ENV TZ=Asia/Shanghai
 
 ARG TARGETARCH
 ARG VERSION
-ENV VERSION=${VERSION}
 ENV PYTHON_IN_DOCKER='PYTHON_IN_DOCKER'
 
 WORKDIR /app
@@ -63,5 +62,6 @@ COPY scripts/browser-service-entrypoint.sh /app/browser-service-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh /app/browser-service-entrypoint.sh
 
 ENV LANG=C.UTF-8
+ENV VERSION=${VERSION}
 
 CMD ["/app/docker-entrypoint.sh"]
