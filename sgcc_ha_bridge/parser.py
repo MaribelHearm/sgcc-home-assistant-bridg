@@ -268,8 +268,9 @@ def _parse_balance(raw: dict[str, Any], account_no: str, observed_at: str) -> Ba
 def _normalize_balance_obj(raw: dict[str, Any]) -> dict[str, Any]:
     """Return raw balance-like data plus synthetic keys from label/value rows."""
     normalized = dict(raw)
-    label_values = _balance_values_from_label_row(raw)
-    for key, value in label_values.items():
+    for key, value in _balance_values_from_known_structures(raw).items():
+        normalized.setdefault(key, value)
+    for key, value in _balance_values_from_label_row(raw).items():
         normalized.setdefault(key, value)
     return normalized
 
@@ -280,6 +281,16 @@ def _merge_balance_obj(base: dict[str, Any], candidate: dict[str, Any]) -> dict[
         if key not in merged or merged.get(key) in (None, ""):
             merged[key] = value
     return merged
+
+
+def _balance_values_from_known_structures(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map confirmed SGCC structured fields to the normalized balance shape."""
+    if (
+        _safe_float(raw.get("sumMoney")) is not None
+        and any(key in raw for key in ("prepayBal", "historyOwe", "estiAmt"))
+    ):
+        return {"accountBalance": raw.get("sumMoney")}
+    return {}
 
 
 def _balance_values_from_label_row(raw: dict[str, Any]) -> dict[str, Any]:

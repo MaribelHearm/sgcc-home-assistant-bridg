@@ -119,6 +119,60 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(data.balance.balance_cny, 23.46)
         self.assertIsNone(data.balance.prepay_balance_cny)
 
+    def test_parse_balance_from_mixin_yue_sum_money_sample(self):
+        components = [
+            {
+                "data": {
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567895735",
+                        "amtTime": "2026-07-07 05:15:50",
+                        "estiAmt": "47.14",
+                        "historyOwe": "0",
+                        "prepayBal": "916.32",
+                        "sumMoney": "869.18",
+                    }
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.account.account_no, "1234567895735")
+        self.assertEqual(data.balance.account_no, "1234567895735")
+        self.assertEqual(data.balance.observed_at, "2026-07-07 05:15:50")
+        self.assertEqual(data.balance.balance_cny, 869.18)
+        self.assertEqual(data.balance.prepay_balance_cny, 916.32)
+        self.assertEqual(data.balance.arrears_cny, 0.0)
+
+    def test_parse_balance_from_mixin_yue_sum_money_with_zero_prepay_sample(self):
+        components = [
+            {
+                "data": {
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567897516",
+                        "amtTime": "2026-07-07 03:14:50",
+                        "historyOwe": "0",
+                        "prepayBal": "0",
+                        "sumMoney": "169.77",
+                    }
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.balance.observed_at, "2026-07-07 03:14:50")
+        self.assertEqual(data.balance.balance_cny, 169.77)
+        self.assertEqual(data.balance.prepay_balance_cny, 0.0)
+        self.assertEqual(data.balance.arrears_cny, 0.0)
+
+    def test_sum_money_without_mixin_yue_context_is_not_balance(self):
+        components = [{"data": {"summary": {"sumMoney": "999.99"}}}]
+
+        data = parse_account_data(components=components)
+
+        self.assertIsNone(data.balance)
+
     def test_parse_balance_from_label_value_rows(self):
         components = [
             {

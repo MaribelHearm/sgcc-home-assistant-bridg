@@ -81,8 +81,37 @@ class MoneyDiagnosticsTestCase(unittest.TestCase):
         output = stream.getvalue()
         self.assertIn("Path B 金额诊断摘要", output)
         self.assertIn("category=account_balance", output)
+        self.assertIn("Path B 金额候选[1]: category=", output)
+        self.assertNotIn("Path B 金额候选[1]:,", output)
         self.assertIn("account=*********0016", output)
         self.assertNotIn("1234567890016", output)
+
+    def test_sum_money_candidate_is_classified_as_account_balance_in_yue_context(self):
+        components = [
+            {
+                "data": {
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567897516",
+                        "amtTime": "2026-07-07 03:14:50",
+                        "historyOwe": "0",
+                        "prepayBal": "0",
+                        "sumMoney": "169.77",
+                    }
+                }
+            }
+        ]
+
+        candidates = collect_money_candidates(components=components)
+        by_source = {item.source: item for item in candidates}
+
+        self.assertEqual(
+            by_source["component[0].data.mixinGetYuEdata.sumMoney"].category,
+            "account_balance",
+        )
+        self.assertEqual(
+            by_source["component[0].data.mixinGetYuEdata.sumMoney"].time,
+            "2026-07-07 03:14:50",
+        )
 
     def test_limit_is_applied(self):
         store = {"state": {f"accountBalance{i}": str(i) for i in range(10)}}
