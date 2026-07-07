@@ -101,6 +101,9 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     needs: test
+    concurrency:
+      group: docker-image-${{ github.event_name == 'pull_request' && github.run_id || 'publish' }}
+      cancel-in-progress: false
     env:
       HAS_ALIYUN_SECRETS: ${{ secrets.ALIYUN_REGISTRY != '' && secrets.ALIYUN_USERNAME != '' && secrets.ALIYUN_PASSWORD != '' }}
     steps:
