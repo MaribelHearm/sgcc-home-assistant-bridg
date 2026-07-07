@@ -144,7 +144,7 @@ def _format_candidate_line(index: int, candidate: MoneyCandidate) -> str:
         parts.append(f"account={candidate.account}")
     if candidate.label:
         parts.append(f"label={redact_text(candidate.label[:40])}")
-    return ", ".join(parts)
+    return f"{parts[0]} {', '.join(parts[1:])}"
 
 
 def _iter_source_roots(store: Any, components: Any) -> Iterable[tuple[str, Any]]:
@@ -211,7 +211,11 @@ def _candidate_from_scalar(
 
     label = _nearest_text(ancestors, _LABEL_KEYS)
     context = " ".join([key, source, label]).casefold()
-    category = _classify_money_context(context)
+    category = (
+        "account_balance"
+        if _is_sum_money_balance(key, source, ancestors)
+        else _classify_money_context(context)
+    )
     if category is None:
         return None
 
@@ -229,6 +233,18 @@ def _candidate_from_scalar(
         time=_format_context_value(time_value),
         period=_format_context_value(period_value),
     )
+
+
+def _is_sum_money_balance(key: str, source: str, ancestors: list[dict[str, Any]]) -> bool:
+    if key.casefold() != "summoney":
+        return False
+    source_compact = re.sub(r"[\s_\-.]+", "", source).casefold()
+    if "mixingetyuedata" in source_compact:
+        return True
+    for obj in ancestors:
+        if isinstance(obj, dict) and any(k in obj for k in ("prepayBal", "historyOwe", "estiAmt")):
+            return True
+    return False
 
 
 def _classify_money_context(context: str) -> Optional[str]:
