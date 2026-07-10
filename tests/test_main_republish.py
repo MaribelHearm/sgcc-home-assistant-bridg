@@ -18,6 +18,7 @@ from sgcc_ha_bridge.store import Store
 
 class FakeMqttPublisher:
     published = []
+    removed = []
 
     def __init__(self, config):
         self.config = config
@@ -33,6 +34,10 @@ class FakeMqttPublisher:
         FakeMqttPublisher.published.append(data)
         return True
 
+    def remove_account_data(self, data):
+        FakeMqttPublisher.removed.append(data)
+        return True
+
 
 class RepublishMqttFromStoreTestCase(unittest.TestCase):
     def setUp(self):
@@ -43,6 +48,7 @@ class RepublishMqttFromStoreTestCase(unittest.TestCase):
         self.old_publisher = main.MqttPublisher
         main.MqttPublisher = FakeMqttPublisher
         FakeMqttPublisher.published.clear()
+        FakeMqttPublisher.removed.clear()
 
     def tearDown(self):
         main.MqttPublisher = self.old_publisher
@@ -90,6 +96,43 @@ class RepublishMqttFromStoreTestCase(unittest.TestCase):
 
         self.assertFalse(main.republish_mqtt_from_store(FetcherConfig(PUBLISHER="mqtt")))
         self.assertEqual(len(FakeMqttPublisher.published), 1)
+
+    def test_inactive_and_ignored_accounts_are_cleaned_not_republished(self):
+        self._save(AccountData(
+            account=Account(account_no="1234567899314"),
+            daily=[DailyReading(
+                account_no="1234567899314",
+                date=main.datetime.now().strftime("%Y-%m-%d"),
+                total_usage_kwh=1.2,
+            )],
+        ))
+        self._save(AccountData(
+            account=Account(account_no="1234567897402"),
+            daily=[DailyReading(account_no="1234567897402", date="2020-01-01", total_usage_kwh=9.9)],
+        ))
+        self._save(AccountData(
+            account=Account(account_no="1234567893445"),
+            daily=[DailyReading(account_no="1234567893445", date="2020-01-01", total_usage_kwh=9.9)],
+        ))
+        with Store(self.db_path) as store:
+            run_id = store.start_run(FetchRun(trigger_type="test", started_at="reconcile"))
+            store.reconcile_active_accounts(
+                ["1234567899314", "1234567893445"],
+                run_id,
+            )
+
+        self.assertTrue(main.republish_mqtt_from_store(FetcherConfig(
+            PUBLISHER="mqtt",
+            IGNORE_USER_ID=["1234567893445"],
+        )))
+        self.assertEqual(
+            [item.account.account_no for item in FakeMqttPublisher.published],
+            ["1234567899314"],
+        )
+        self.assertEqual(
+            sorted(item.account.account_no for item in FakeMqttPublisher.removed),
+            ["1234567893445", "1234567897402"],
+        )
 
 
 class CacheFileUpdator:
@@ -193,6 +236,25 @@ class CacheFreshnessGuardTestCase(unittest.TestCase):
         ))
 
         self.assertFalse(main.has_recent_cached_business_data(None, FetcherConfig(PUBLISHER="mqtt")))
+
+    def test_store_freshness_ignores_inactive_stale_accounts(self):
+        self._save(AccountData(
+            account=Account(account_no="fresh-account"),
+            daily=[DailyReading(
+                account_no="fresh-account",
+                date=main.datetime.now().strftime("%Y-%m-%d"),
+                total_usage_kwh=1.2,
+            )],
+        ))
+        self._save(AccountData(
+            account=Account(account_no="stale-account"),
+            daily=[DailyReading(account_no="stale-account", date="2020-01-01", total_usage_kwh=9.9)],
+        ))
+        with Store(self.db_path) as store:
+            run_id = store.start_run(FetchRun(trigger_type="test", started_at="reconcile"))
+            store.reconcile_active_accounts(["fresh-account"], run_id)
+
+        self.assertTrue(main.has_recent_cached_business_data(None, FetcherConfig(PUBLISHER="mqtt")))
 
 
 class FakeFetcher:

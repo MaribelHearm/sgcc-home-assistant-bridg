@@ -48,6 +48,42 @@ class StoreTestCase(unittest.TestCase):
             self.store.conn.execute("PRAGMA foreign_keys").fetchone()[0],
             1,
         )
+        account_columns = {
+            row["name"]
+            for row in self.store.conn.execute("PRAGMA table_info(accounts)").fetchall()
+        }
+        self.assertIn("is_active", account_columns)
+        self.assertIn("last_seen_fetch_run_id", account_columns)
+
+    def test_init_schema_migrates_existing_accounts_table(self):
+        self.store.close()
+        os.remove(self.db_path)
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            """
+            CREATE TABLE accounts (
+                account_no TEXT PRIMARY KEY NOT NULL,
+                display_name TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT '',
+                province TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO accounts (account_no) VALUES (?)",
+            ("1234567897402",),
+        )
+        conn.commit()
+        conn.close()
+
+        self.store = Store(self.db_path)
+
+        row = self.store.conn.execute(
+            "SELECT is_active, last_seen_fetch_run_id FROM accounts WHERE account_no = ?",
+            ("1234567897402",),
+        ).fetchone()
+        self.assertEqual(row["is_active"], 1)
+        self.assertIsNone(row["last_seen_fetch_run_id"])
 
     def test_save_account_data_roundtrip(self):
         run_id = self.store.start_run(
@@ -107,6 +143,62 @@ class StoreTestCase(unittest.TestCase):
         self.assertEqual(self.store.get_daily("1234567890123", limit=10), data.daily)
         self.assertEqual(self.store.get_monthly("1234567890123", limit=10), data.monthly)
         self.assertEqual(self.store.get_yearly("1234567890123", limit=10), [data.yearly])
+
+    def test_reconcile_active_accounts_keeps_history_and_deactivates_missing_accounts(self):
+        run1 = self.store.start_run(FetchRun(trigger_type="manual", started_at="run1"))
+        run2 = self.store.start_run(FetchRun(trigger_type="manual", started_at="run2"))
+        for account_no in ("1234567899314", "1234567897402"):
+            self.store.save_account_data(
+                AccountData(
+                    account=Account(account_no=account_no),
+                    daily=[DailyReading(account_no=account_no, date="2026-07-10", total_usage_kwh=1.0)],
+                ),
+                run1,
+            )
+
+        self.store.save_account_data(
+            AccountData(account=Account(account_no="1234567899314")),
+            run2,
+        )
+        deactivated = self.store.reconcile_active_accounts(
+            ["1234567899314"],
+            run2,
+        )
+
+        self.assertEqual(deactivated, ["1234567897402"])
+        self.assertEqual(self.store.list_account_nos(active_only=True), ["1234567899314"])
+        self.assertEqual(self.store.list_account_nos(active_only=False), ["1234567897402"])
+        self.assertEqual(
+            self.store.get_daily("1234567897402", limit=10)[0].total_usage_kwh,
+            1.0,
+        )
+
+    def test_reconcile_active_accounts_rejects_empty_authoritative_set(self):
+        with self.assertRaises(ValueError):
+            self.store.reconcile_active_accounts([], 1)
+
+    def test_save_account_data_reactivates_account(self):
+        run1 = self.store.start_run(FetchRun(trigger_type="manual", started_at="run1"))
+        run2 = self.store.start_run(FetchRun(trigger_type="manual", started_at="run2"))
+        self.store.save_account_data(
+            AccountData(account=Account(account_no="1234567897402")),
+            run1,
+        )
+        self.store.save_account_data(
+            AccountData(account=Account(account_no="1234567899314")),
+            run1,
+        )
+        self.store.reconcile_active_accounts(["1234567899314"], run1)
+
+        self.store.save_account_data(
+            AccountData(account=Account(account_no="1234567897402")),
+            run2,
+        )
+
+        self.assertEqual(
+            self.store.list_account_nos(active_only=True),
+            ["1234567897402", "1234567899314"],
+        )
 
     def test_daily_upsert_is_idempotent_and_updates_value(self):
         run1 = self.store.start_run(FetchRun(trigger_type="manual", started_at="run1"))

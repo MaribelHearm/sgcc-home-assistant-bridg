@@ -70,7 +70,9 @@ class Store:
                 account_no TEXT PRIMARY KEY NOT NULL,
                 display_name TEXT NOT NULL DEFAULT '',
                 address TEXT NOT NULL DEFAULT '',
-                province TEXT NOT NULL DEFAULT ''
+                province TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                last_seen_fetch_run_id INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS fetch_runs (
@@ -161,17 +163,38 @@ class Store:
             );
             """
         )
+        self._ensure_account_lifecycle_columns()
         self.conn.commit()
+
+    def _ensure_account_lifecycle_columns(self) -> None:
+        """Apply additive account lifecycle migration for existing databases."""
+        columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(accounts)").fetchall()
+        }
+        if "is_active" not in columns:
+            self.conn.execute(
+                "ALTER TABLE accounts ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+            )
+        if "last_seen_fetch_run_id" not in columns:
+            self.conn.execute(
+                "ALTER TABLE accounts ADD COLUMN last_seen_fetch_run_id INTEGER"
+            )
 
     def upsert_account(self, account: Account) -> None:
         self.conn.execute(
             """
-            INSERT INTO accounts (account_no, display_name, address, province)
-            VALUES (:account_no, :display_name, :address, :province)
+            INSERT INTO accounts (
+                account_no, display_name, address, province, is_active
+            )
+            VALUES (
+                :account_no, :display_name, :address, :province, 1
+            )
             ON CONFLICT(account_no) DO UPDATE SET
                 display_name = excluded.display_name,
                 address = excluded.address,
-                province = excluded.province
+                province = excluded.province,
+                is_active = 1
             """,
             asdict(account),
         )
@@ -236,7 +259,7 @@ class Store:
     def save_account_data(self, account_data: AccountData, fetch_run_id: int) -> None:
         """Persist one AccountData unit, replacing rows with the same natural key."""
         with self.conn:
-            self._upsert_account_no_commit(account_data.account)
+            self._upsert_account_no_commit(account_data.account, fetch_run_id)
             if account_data.balance is not None:
                 self._upsert_balance_no_commit(account_data.balance, fetch_run_id)
             if account_data.yearly is not None:
@@ -245,6 +268,68 @@ class Store:
                 self._upsert_monthly_no_commit(item, fetch_run_id)
             for item in account_data.daily:
                 self._upsert_daily_no_commit(item, fetch_run_id)
+
+    def reconcile_active_accounts(
+        self,
+        account_nos: Iterable[str],
+        fetch_run_id: int,
+    ) -> list[str]:
+        """Mark accounts missing from one authoritative successful fetch inactive.
+
+        Historical readings remain available for diagnostics and MQTT cleanup.
+        An empty set is rejected so a partial/failed scrape cannot deactivate
+        every cached account.
+        """
+        authoritative = sorted({
+            str(value).strip()
+            for value in account_nos
+            if value is not None and str(value).strip()
+        })
+        if not authoritative:
+            raise ValueError("authoritative account set must not be empty")
+
+        placeholders = ", ".join("?" for _ in authoritative)
+        with self.conn:
+            rows = self.conn.execute(
+                f"""
+                SELECT account_no
+                FROM accounts
+                WHERE is_active = 1
+                  AND account_no NOT IN ({placeholders})
+                ORDER BY account_no
+                """,
+                authoritative,
+            ).fetchall()
+            deactivated = [row["account_no"] for row in rows]
+            self.conn.execute(
+                f"""
+                UPDATE accounts
+                SET is_active = 0
+                WHERE is_active = 1
+                  AND account_no NOT IN ({placeholders})
+                """,
+                authoritative,
+            )
+            self.conn.execute(
+                f"""
+                UPDATE accounts
+                SET is_active = 1,
+                    last_seen_fetch_run_id = ?
+                WHERE account_no IN ({placeholders})
+                """,
+                [fetch_run_id, *authoritative],
+            )
+        return deactivated
+
+    def list_account_nos(self, active_only: Optional[bool] = None) -> list[str]:
+        sql = "SELECT account_no FROM accounts"
+        params: list[Any] = []
+        if active_only is True:
+            sql += " WHERE is_active = 1"
+        elif active_only is False:
+            sql += " WHERE is_active = 0"
+        sql += " ORDER BY account_no"
+        return [row["account_no"] for row in self.conn.execute(sql, params).fetchall()]
 
     def upsert_publisher_state(self, state: PublisherState) -> None:
         data = asdict(state)
@@ -274,6 +359,23 @@ class Store:
             (account_no,),
         ).fetchone()
         return Account(**dict(row)) if row else None
+
+    def get_account_data(
+        self,
+        account_no: str,
+        daily_limit: int = 31,
+        monthly_limit: int = 24,
+    ) -> Optional[AccountData]:
+        account = self.get_account(account_no)
+        if account is None:
+            return None
+        return AccountData(
+            account=account,
+            balance=self.get_latest_balance(account_no),
+            yearly=(self.get_yearly(account_no, 1) or [None])[0],
+            monthly=self.get_monthly(account_no, monthly_limit),
+            daily=self.get_daily(account_no, daily_limit),
+        )
 
     def get_latest_balance(self, account_no: str) -> Optional[Balance]:
         row = self.conn.execute(
@@ -328,17 +430,26 @@ class Store:
         ).fetchall()
         return [YearlyReading(**dict(row)) for row in rows]
 
-    def _upsert_account_no_commit(self, account: Account) -> None:
+    def _upsert_account_no_commit(self, account: Account, fetch_run_id: int) -> None:
+        data = {**asdict(account), "fetch_run_id": fetch_run_id}
         self.conn.execute(
             """
-            INSERT INTO accounts (account_no, display_name, address, province)
-            VALUES (:account_no, :display_name, :address, :province)
+            INSERT INTO accounts (
+                account_no, display_name, address, province,
+                is_active, last_seen_fetch_run_id
+            )
+            VALUES (
+                :account_no, :display_name, :address, :province,
+                1, :fetch_run_id
+            )
             ON CONFLICT(account_no) DO UPDATE SET
                 display_name = excluded.display_name,
                 address = excluded.address,
-                province = excluded.province
+                province = excluded.province,
+                is_active = 1,
+                last_seen_fetch_run_id = excluded.last_seen_fetch_run_id
             """,
-            asdict(account),
+            data,
         )
 
     def _upsert_balance_no_commit(self, balance: Balance, fetch_run_id: int) -> None:

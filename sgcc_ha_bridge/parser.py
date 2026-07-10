@@ -13,7 +13,6 @@ from typing import Any, Iterable, Optional
 from .model import Account, AccountData, Balance, DailyReading, MonthlyReading, YearlyReading
 
 
-_ACCOUNT_RE = re.compile(r"(?<!\d)(\d{13})(?!\d)")
 _MASKED_ACCOUNT_RE = re.compile(r"\*+(\d{4})$")
 
 _BALANCE_KEYS = (
@@ -85,8 +84,18 @@ _LEGACY_ARREARS_ALIAS_KEYS = (
 _BALANCE_TIME_KEYS = ("amtTime", "queryTime")
 _LABEL_KEYS = ("label",)
 _VALUE_KEYS = ("value",)
-_ACCOUNT_CONTEXT_KEYS = ("consNo", "consNo_dst", "accountNo", "acctNo", "user_id", "userId", "selectValue")
+_ACCOUNT_CONTEXT_KEYS = ("consNo", "consNo_dst", "accountNo", "acctNo", "selectValue")
 _BALANCE_CONTEXT_KEYS = _ACCOUNT_CONTEXT_KEYS + _BALANCE_TIME_KEYS + ("elecAddr", "elecAddr_dst", "address")
+_ACCOUNT_IDENTITY_KEYS = ("consNo_dst", "selectValue", "accountNo", "acctNo", "consNo")
+_ACCOUNT_DESCRIPTION_KEYS = (
+    "elecAddr_dst",
+    "elecAddr",
+    "address",
+    "consName_dst",
+    "newConsName_dst",
+    "custName",
+    "consName",
+)
 
 _EXPLICIT_ACCOUNT_BALANCE_LABELS = ("账户余额",)
 _EXPLICIT_PREPAY_BALANCE_LABELS = ("预付费余额",)
@@ -163,6 +172,17 @@ def merge_account_data(*items: AccountData) -> AccountData:
         return AccountData(account=Account(account_no=""))
     result = items[0]
     for item in items[1:]:
+        current_account_no = result.account.account_no
+        incoming_account_no = item.account.account_no
+        if (
+            current_account_no
+            and incoming_account_no
+            and "*" not in current_account_no
+            and "*" not in incoming_account_no
+            and current_account_no != incoming_account_no
+        ):
+            raise ValueError("cannot merge AccountData from different accounts")
+
         account = result.account
         if item.account.account_no and (not account.account_no or "*" in account.account_no):
             account = replace(account, account_no=item.account.account_no)
@@ -241,20 +261,19 @@ def _walk_values(value: Any) -> Iterable[Any]:
 
 
 def _pick_account_obj(values: list[Any]) -> dict[str, Any]:
-    for value in values:
-        if isinstance(value, dict) and any(k in value for k in ("consNo", "consNo_dst", "elecAddr", "elecAddr_dst", "custName")):
-            # Prefer objects that actually describe a power account, not request params.
-            if any(k in value for k in ("elecAddr_dst", "elecAddr", "consName_dst", "newConsName_dst", "proCode")):
-                return value
-    for value in values:
-        if isinstance(value, dict) and any(k in value for k in ("consNo", "consNo_dst")):
-            return value
-    return {}
+    candidates: list[tuple[int, int, dict[str, Any]]] = []
+    for index, value in enumerate(values):
+        score = _account_obj_score(value)
+        if score >= 0:
+            candidates.append((score, index, value))
+    if not candidates:
+        return {}
+    return min(candidates, key=lambda item: (-item[0], item[1]))[2]
 
 
 def _pick_account_no(values: list[Any], account_obj: dict[str, Any]) -> str:
     for obj in [account_obj] + [v for v in values if isinstance(v, dict)]:
-        for key in ("consNo", "user_id", "userId", "selectValue", "consNo_dst", "accountNo", "acctNo"):
+        for key in _ACCOUNT_IDENTITY_KEYS:
             account_no = _extract_account_no(obj.get(key) if isinstance(obj, dict) else None)
             if account_no and "*" not in account_no:
                 return account_no
@@ -264,6 +283,37 @@ def _pick_account_no(values: list[Any], account_obj: dict[str, Any]) -> str:
         if masked:
             return masked
     return ""
+
+
+def _account_obj_score(value: Any) -> int:
+    if not isinstance(value, dict):
+        return -1
+
+    identity_score = -1
+    identity_weights = {
+        # The Element UI model is the live selected account and must beat
+        # account-list objects that describe every bound household.
+        "selectValue": 300,
+        "consNo_dst": 100,
+        "accountNo": 90,
+        "acctNo": 90,
+        "consNo": 80,
+    }
+    for key, weight in identity_weights.items():
+        if _extract_account_no(value.get(key)):
+            identity_score = max(identity_score, weight)
+        elif _extract_masked_account(value.get(key)):
+            identity_score = max(identity_score, 30)
+    if identity_score < 0:
+        return -1
+
+    score = identity_score
+    score += 20 * sum(1 for key in _ACCOUNT_DESCRIPTION_KEYS if value.get(key))
+    if any(key in value for key in _DIRECT_AMOUNT_KEYS + _BALANCE_TIME_KEYS):
+        score += 15
+    if isinstance(value.get("dataInfo"), dict) or isinstance(value.get("mothEleList"), list):
+        score += 15
+    return score
 
 
 def _pick_balance_obj(values: list[Any]) -> dict[str, Any]:
@@ -653,8 +703,8 @@ def _safe_float(value: Any) -> Optional[float]:
 def _extract_account_no(value: Any) -> str:
     if value is None:
         return ""
-    match = _ACCOUNT_RE.search(str(value))
-    return match.group(1) if match else ""
+    text = str(value).strip()
+    return text if len(text) == 13 and text.isdigit() else ""
 
 
 def _extract_masked_account(value: Any) -> str:

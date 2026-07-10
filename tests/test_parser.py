@@ -70,6 +70,101 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(data.daily[0].date, "2026-06-17")
         self.assertEqual(data.daily[0].peak_usage_kwh, 3.0)
 
+    def test_account_identity_ignores_13_digit_user_id(self):
+        components = [
+            {
+                "data": {
+                    "consInfoobj": {
+                        "consNo": "encrypted-account-value",
+                        "userId": "9876543213445",
+                        "consNo_dst": "1234567899314",
+                        "elecAddr_dst": "redacted",
+                    },
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567899314",
+                        "accountBalance": "88.12",
+                    },
+                }
+            }
+        ]
+
+        data = parse_account_data(components=components)
+
+        self.assertEqual(data.account.account_no, "1234567899314")
+        self.assertEqual(data.balance.account_no, "1234567899314")
+
+    def test_user_id_alone_is_not_accepted_as_account_number(self):
+        data = parse_account_data(
+            store={"state": {"user": {"userId": "9876543213445"}}}
+        )
+
+        self.assertEqual(data.account.account_no, "")
+
+    def test_request_params_object_does_not_beat_decrypted_business_account(self):
+        store = {
+            "getters": {
+                "getRequestParams": [
+                    {
+                        "requestBody": {
+                            "data": {
+                                "list": [
+                                    {
+                                        "consNo": "encrypted-account-value",
+                                        "proCode": "31",
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+        components = [
+            {
+                "data": {
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567899314",
+                        "accountBalance": "88.12",
+                    }
+                }
+            }
+        ]
+
+        data = parse_account_data(store=store, components=components)
+
+        self.assertEqual(data.account.account_no, "1234567899314")
+
+    def test_selected_account_value_beats_first_account_in_global_list(self):
+        store = {
+            "state": {
+                "accounts": [
+                    {
+                        "consNo_dst": "1234567899314",
+                        "elecAddr_dst": "first address",
+                    },
+                    {
+                        "consNo_dst": "1234567897325",
+                        "elecAddr_dst": "second address",
+                    },
+                ]
+            }
+        }
+        components = [
+            {
+                "data": {
+                    "selectValue": "1234567897325",
+                    "mixinGetYuEdata": {
+                        "consNo": "1234567897325",
+                        "accountBalance": "88.12",
+                    },
+                }
+            }
+        ]
+
+        data = parse_account_data(store=store, components=components)
+
+        self.assertEqual(data.account.account_no, "1234567897325")
+
     def test_parse_balance_prefers_scalar_amount_over_parent_container(self):
         store = {
             "state": {
@@ -406,6 +501,21 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(merged.account.account_no, "1234567890123")
         self.assertEqual(merged.balance.account_no, "1234567890123")
         self.assertEqual(merged.balance.balance_cny, 10.5)
+
+    def test_merge_account_data_rejects_different_full_account_numbers(self):
+        first = parse_account_data(
+            components=[{"data": {"mixinGetYuEdata": {"consNo": "1234567899314", "accountBalance": "10.5"}}}]
+        )
+        second = parse_account_data(
+            components=[{"data": {"powerData": {
+                "consNo": "1234567897325",
+                "dataInfo": {"year": "2026", "totalEleNum": "1"},
+                "mothEleList": [],
+            }}}]
+        )
+
+        with self.assertRaises(ValueError):
+            merge_account_data(first, second)
 
 
 if __name__ == "__main__":
