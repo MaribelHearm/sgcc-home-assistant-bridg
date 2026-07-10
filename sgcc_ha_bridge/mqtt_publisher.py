@@ -141,6 +141,37 @@ class MqttPublisher:
             logging.warning(f"MQTT 发布失败: {e}")
             return False
 
+    def remove_account_data(self, account_data: AccountData) -> bool:
+        """Remove every retained MQTT Discovery entity for one account."""
+        if self.client is None or not self.connected:
+            logging.warning("MQTT 未连接，跳过账户 Discovery 清理。")
+            return False
+
+        account_no = account_data.account.account_no if account_data and account_data.account else ""
+        if not account_no:
+            return False
+        try:
+            masked = mask_account_no(account_no)
+            node = self._safe_topic_part(f"sgcc_{masked}")
+            device = {
+                "identifiers": [f"sgcc_{masked}"],
+                "name": f"国网电费 {masked}",
+                "manufacturer": "SGCC bridge",
+            }
+            keys = sorted({
+                str(spec.get("key") or "")
+                for spec in self._sensor_specs(account_data, masked, device)
+                if spec.get("key")
+            })
+            for key in keys:
+                config_topic = f"{self.discovery_prefix}/sensor/{node}/{key}/config"
+                self._publish(config_topic, "", retain=True)
+            logging.info(f"MQTT 已清理失效户号 {masked} 的 {len(keys)} 个 Discovery 配置。")
+            return bool(keys)
+        except Exception as e:
+            logging.warning(f"MQTT 账户 Discovery 清理失败: {e}")
+            return False
+
     def _publish(self, topic: str, payload: Any, retain: bool = False) -> None:
         result = self.client.publish(topic, payload=payload, retain=retain)
         rc = getattr(result, "rc", 0)

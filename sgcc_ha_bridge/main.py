@@ -197,26 +197,16 @@ def has_recent_cached_business_data(updator: SensorUpdator | None, config: Fetch
 def _store_has_recent_business_data(config: FetcherConfig) -> bool:
     try:
         with Store() as store:
-            account_rows = store.conn.execute(
-                "SELECT account_no FROM accounts ORDER BY account_no"
-            ).fetchall()
-            if not account_rows:
+            account_nos = store.list_account_nos(active_only=True)
+            if not account_nos:
                 return False
             ignored_accounts = set(config.IGNORE_USER_ID or [])
-            for row in account_rows:
-                account_no = row["account_no"]
+            for account_no in account_nos:
                 if account_no in ignored_accounts:
                     continue
-                account = store.get_account(account_no)
-                if account is None:
+                data = store.get_account_data(account_no)
+                if data is None:
                     continue
-                data = AccountData(
-                    account=account,
-                    balance=store.get_latest_balance(account_no),
-                    yearly=(store.get_yearly(account_no, 1) or [None])[0],
-                    monthly=store.get_monthly(account_no, 24),
-                    daily=store.get_daily(account_no, 31),
-                )
                 if not account_data_has_recent_cache_value(data):
                     return False
             return True
@@ -256,10 +246,19 @@ def _legacy_cache_has_today_business_data(updator: SensorUpdator, config: Fetche
 def republish_mqtt_from_store(config: FetcherConfig) -> bool:
     try:
         with Store() as store:
-            account_rows = store.conn.execute(
-                "SELECT account_no FROM accounts ORDER BY account_no"
-            ).fetchall()
-            if not account_rows:
+            ignored_accounts = set(config.IGNORE_USER_ID or [])
+            active_account_nos = store.list_account_nos(active_only=True)
+            inactive_account_nos = store.list_account_nos(active_only=False)
+            publish_account_nos = [
+                account_no
+                for account_no in active_account_nos
+                if account_no not in ignored_accounts
+            ]
+            cleanup_account_nos = sorted(
+                set(inactive_account_nos)
+                | {account_no for account_no in active_account_nos if account_no in ignored_accounts}
+            )
+            if not publish_account_nos and not cleanup_account_nos:
                 logging.info("SQLite Store 中没有账户缓存，跳过 MQTT 重发布。")
                 return False
             with MqttPublisher(config) as publisher:
@@ -268,18 +267,22 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                 ok = True
                 all_recent = True
                 published_count = 0
-                for row in account_rows:
-                    account_no = row["account_no"]
-                    account = store.get_account(account_no)
-                    if account is None:
+                cleanup_count = 0
+                for account_no in cleanup_account_nos:
+                    data = store.get_account_data(account_no)
+                    if data is None:
                         continue
-                    data = AccountData(
-                        account=account,
-                        balance=store.get_latest_balance(account_no),
-                        yearly=(store.get_yearly(account_no, 1) or [None])[0],
-                        monthly=store.get_monthly(account_no, 24),
-                        daily=store.get_daily(account_no, 31),
-                    )
+                    if publisher.remove_account_data(data):
+                        cleanup_count += 1
+                    else:
+                        ok = False
+                if cleanup_count:
+                    logging.info(f"MQTT 已从 SQLite 缓存清理 {cleanup_count} 个失效/忽略户号。")
+
+                for account_no in publish_account_nos:
+                    data = store.get_account_data(account_no)
+                    if data is None:
+                        continue
                     masked_account = mask_account_no(account_no)
                     if not has_useful_account_data(data):
                         logging.warning(

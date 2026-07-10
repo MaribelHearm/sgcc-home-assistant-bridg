@@ -9,7 +9,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Optional
 
 from selenium.common.exceptions import TimeoutException
@@ -23,6 +23,14 @@ from .model import AccountData, mask_account_no
 from .parser import merge_account_data, parse_account_data
 from .diag import diag_enabled
 from . import vue_state
+
+
+@dataclass(frozen=True)
+class AccountOption:
+    """Stable account selector identity captured from the live Vue option."""
+
+    index: int
+    account_no: str = ""
 
 
 class Scraper:
@@ -39,6 +47,8 @@ class Scraper:
         self.wait_seconds = wait_seconds
         self.settle_seconds = self._settle_seconds_from_env() if settle_seconds is None else settle_seconds
         self.diagnostic = diagnostic
+        self.account_set_authoritative = False
+        self._selector_enumeration_failed = False
 
     @staticmethod
     def _settle_seconds_from_env() -> float:
@@ -53,17 +63,19 @@ class Scraper:
         Multi-account handling is deliberately inclusive:
 
         * scrape the currently selected/default account first;
-        * then iterate every visible selector option by index;
+        * then iterate every visible selector option by stable account number;
         * de-duplicate parsed accounts by account number.
 
         Some SGCC/Element UI account selectors only list accounts that can be
         switched to, excluding the currently selected account; others include
-        the current account but can render duplicate/near-identical display
-        text for multiple residential accounts.  Counting de-duplicated option
-        text would therefore under-count real accounts.
+        the current account.  Display text is not an identity source: current
+        Element UI pages expose the real number through option Vue props.
         """
         self._navigate(BALANCE_URL, "账户余额")
-        selector_option_count = len(self._visible_account_options())
+        self._selector_enumeration_failed = False
+        account_options = self._visible_account_options()
+        self.account_set_authoritative = not self._selector_enumeration_failed
+        selector_option_count = len(account_options)
         logging.info(f"Path B 账户候选: 当前账户 + {selector_option_count} 个下拉选项。")
         if self.diagnostic is not None:
             self.diagnostic.record_selector_options(selector_option_count)
@@ -72,14 +84,33 @@ class Scraper:
         seen_accounts: set[str] = set()
 
         current = self._fetch_current_account()
+        if current is None or not self._account_identity(current):
+            self.account_set_authoritative = False
         self._append_unique_result(results, seen_accounts, current)
         if max_accounts is not None and len(results) >= max_accounts:
+            if account_options:
+                self.account_set_authoritative = False
             return results
 
-        for index in range(selector_option_count):
-            data = self._fetch_selected_account(index)
+        current_identity = self._account_identity(current) if current is not None else None
+        seen_option_accounts: set[str] = set()
+        for option in account_options:
+            if option.account_no:
+                if option.account_no == current_identity:
+                    logging.info(f"Path B 跳过下拉中的当前账户: {mask_account_no(option.account_no)}")
+                    continue
+                if option.account_no in seen_option_accounts:
+                    logging.info(f"Path B 跳过重复账户选项: {mask_account_no(option.account_no)}")
+                    continue
+                seen_option_accounts.add(option.account_no)
+
+            data = self._fetch_selected_account(option)
+            if data is None or not self._account_identity(data):
+                self.account_set_authoritative = False
             self._append_unique_result(results, seen_accounts, data)
             if max_accounts is not None and len(results) >= max_accounts:
+                if option != account_options[-1]:
+                    self.account_set_authoritative = False
                 break
         return results
 
@@ -89,37 +120,73 @@ class Scraper:
         return data if data is not None else AccountData(account=parse_account_data().account)
 
     def _fetch_current_account(self) -> Optional[AccountData]:
-        return self._fetch_account(selection_index=None)
+        return self._fetch_account(selection=None)
 
-    def _fetch_selected_account(self, index: int) -> Optional[AccountData]:
-        return self._fetch_account(selection_index=index)
+    def _fetch_selected_account(self, option: AccountOption) -> Optional[AccountData]:
+        return self._fetch_account(selection=option)
 
-    def _fetch_account(self, selection_index: Optional[int]) -> Optional[AccountData]:
+    def _fetch_account(self, selection: Optional[AccountOption]) -> Optional[AccountData]:
         partials: list[AccountData] = []
 
         self._navigate(BALANCE_URL, "账户余额")
-        if selection_index is not None and not self._select_account(selection_index):
-            logging.warning(f"Path B 无法选择账户下拉第 {selection_index + 1} 项，已跳过该候选。")
+        if selection is not None and not self._select_account(
+            account_no=selection.account_no,
+            fallback_index=selection.index,
+        ):
+            logging.warning(f"Path B 无法选择账户下拉第 {selection.index + 1} 项，已跳过该候选。")
             return None
         partials.append(self._parse_current_page("账户余额"))
         target_account_no = partials[-1].account.account_no
+        if selection is not None and selection.account_no and target_account_no != selection.account_no:
+            logging.warning(
+                "Path B 账户余额页选择后身份校验失败: "
+                f"expected={mask_account_no(selection.account_no)}, "
+                f"actual={mask_account_no(target_account_no)}；已跳过该候选。"
+            )
+            return None
+        if selection is not None and not target_account_no:
+            logging.warning("Path B 账户余额页选择后未解析到户号，已跳过该候选。")
+            return None
 
         self._navigate(ELECTRIC_USAGE_URL, "电量电费查询")
-        if selection_index is not None:
+        if target_account_no:
             current_account_no = self._current_account_no()
             if target_account_no and current_account_no == target_account_no:
                 logging.info(f"Path B 电量电费页已保持账户: {mask_account_no(target_account_no)}")
-            elif not self._select_account(selection_index):
+            elif not self._select_account(account_no=target_account_no):
                 logging.warning(
-                    f"Path B 电量电费页无法再次选择账户下拉第 {selection_index + 1} 项，继续使用当前账户状态。"
+                    f"Path B 电量电费页无法按户号重新选择 {mask_account_no(target_account_no)}，已跳过该候选。"
                 )
+                return None
         self._click_tab("月度电费")
-        partials.append(self._parse_current_page("月度电费"))
+        monthly = self._parse_current_page("月度电费")
+        if not self._page_matches_target_account(monthly, target_account_no, "月度电费"):
+            return None
+        partials.append(monthly)
         self._click_tab("日用电量")
         self._expand_daily_range_to_30_days()
-        partials.append(self._parse_current_page("日用电量"))
+        daily = self._parse_current_page("日用电量")
+        if not self._page_matches_target_account(daily, target_account_no, "日用电量"):
+            return None
+        partials.append(daily)
 
-        return merge_account_data(*partials)
+        try:
+            return merge_account_data(*partials)
+        except ValueError as exc:
+            logging.warning(f"Path B 跨页面账户身份不一致，已跳过该候选: {exc}")
+            return None
+
+    @staticmethod
+    def _page_matches_target_account(data: AccountData, target_account_no: str, label: str) -> bool:
+        page_account_no = data.account.account_no if data and data.account else ""
+        if not target_account_no or not page_account_no or page_account_no == target_account_no:
+            return True
+        logging.warning(
+            f"Path B {label}页账户身份与余额页不一致: "
+            f"target={mask_account_no(target_account_no)}, "
+            f"actual={mask_account_no(page_account_no)}。"
+        )
+        return False
 
     def _append_unique_result(
         self,
@@ -424,9 +491,10 @@ class Scraper:
         except Exception:
             return False
 
-    def _visible_account_options(self) -> list[str]:
-        """Return visible account selector option texts, without exposing them in logs."""
+    def _visible_account_options(self) -> list[AccountOption]:
+        """Return visible selector options with stable Vue-backed identities."""
         if not self._open_account_selector():
+            self._selector_enumeration_failed = True
             return []
         time.sleep(1)
         options = self.driver.find_elements(
@@ -434,19 +502,21 @@ class Scraper:
             "//ul[contains(@class,'el-dropdown-menu')]//li"
             " | //div[contains(@class,'el-select-dropdown')]//li",
         )
-        texts: list[str] = []
+        result: list[AccountOption] = []
         for option in options:
             try:
                 klass = option.get_attribute("class") or ""
-                text = (option.text or "").strip()
-                if option.is_displayed() and text and "disabled" not in klass and "is-disabled" not in klass:
-                    texts.append(text)
+                if option.is_displayed() and "disabled" not in klass and "is-disabled" not in klass:
+                    result.append(AccountOption(
+                        index=len(result),
+                        account_no=self._account_option_no(option),
+                    ))
             except Exception:
                 continue
         self._close_popups()
-        return texts
+        return result
 
-    def _select_account(self, index: int) -> bool:
+    def _select_account(self, account_no: str = "", fallback_index: Optional[int] = None) -> bool:
         if not self._open_account_selector():
             return False
         time.sleep(1)
@@ -459,20 +529,68 @@ class Scraper:
             )
             if self._is_enabled_visible(option)
         ]
-        if index >= len(options):
+        selected = None
+        if account_no:
+            selected = next(
+                (option for option in options if self._account_option_no(option) == account_no),
+                None,
+            )
+        elif fallback_index is not None and fallback_index < len(options):
+            selected = options[fallback_index]
+
+        if selected is None:
             self._close_popups()
             return False
-        self.driver.execute_script("arguments[0].click();", options[index])
-        time.sleep(self.settle_seconds)
-        return True
+        self.driver.execute_script("arguments[0].click();", selected)
+        if not account_no:
+            time.sleep(self.settle_seconds)
+            return True
+        return self._wait_for_selected_account(account_no)
+
+    def _account_option_no(self, option) -> str:
+        try:
+            value = self.driver.execute_script(
+                """
+                const vm = arguments[0].__vue__;
+                const command = vm && vm.$props ? vm.$props.command : null;
+                const values = [
+                  vm && vm.$props ? vm.$props.value : null,
+                  vm && vm._props ? vm._props.value : null,
+                  command ? command.consNo_dst : null,
+                  command ? command.consNoSrc : null,
+                  command ? command.consNo : null,
+                  arguments[0].getAttribute('value')
+                ];
+                for (const value of values) {
+                  const text = String(value || '').trim();
+                  if (/^\\d{13}$/.test(text)) return text;
+                }
+                return '';
+                """,
+                option,
+            )
+        except Exception:
+            value = ""
+        text = str(value or "").strip()
+        return text if len(text) == 13 and text.isdigit() else ""
+
+    def _wait_for_selected_account(self, expected_account_no: str) -> bool:
+        timeout = max(1.0, self.settle_seconds)
+        deadline = time.monotonic() + timeout
+        while True:
+            if self._current_account_no() == expected_account_no:
+                return True
+            if time.monotonic() >= deadline:
+                self._close_popups()
+                return False
+            time.sleep(0.2)
 
     def _open_account_selector(self) -> bool:
         selectors = [
             (By.XPATH, "//span[contains(normalize-space(.), '切换用户')]"),
             (By.CSS_SELECTOR, ".houseNum .el-select .el-input__inner"),
             (By.CSS_SELECTOR, ".houseNum .el-select .el-input__suffix"),
-            (By.CSS_SELECTOR, ".el-dropdown > span"),
-            (By.CLASS_NAME, "el-input__suffix"),
+            (By.CSS_SELECTOR, ".houseNum .el-select"),
         ]
         for by, value in selectors:
             try:

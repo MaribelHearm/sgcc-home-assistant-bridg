@@ -373,6 +373,53 @@ class MqttPublisherTestCase(unittest.TestCase):
         client = FakeClient.instances[-1]
         self.assertEqual(client.published, [])
 
+    def test_remove_account_data_clears_all_retained_discovery_configs(self):
+        account_no = "1234567890123"
+        publisher = MqttPublisher(FetcherConfig(
+            MQTT_HOST="broker.local",
+            MQTT_DISCOVERY_PREFIX="homeassistant",
+        ))
+        self.assertTrue(publisher.connect())
+        data = AccountData(
+            account=Account(account_no=account_no),
+            yearly=YearlyReading(account_no=account_no, year="2026", total_usage_kwh=1.0),
+            monthly=[MonthlyReading(
+                account_no=account_no,
+                year_month="2026-06",
+                total_usage_kwh=1.0,
+            )],
+            daily=[DailyReading(
+                account_no=account_no,
+                date="2026-06-18",
+                total_usage_kwh=1.0,
+            )],
+        )
+
+        self.assertTrue(publisher.remove_account_data(data))
+
+        messages = FakeClient.instances[-1].published
+        self.assertTrue(messages)
+        self.assertTrue(all(topic.endswith("/config") for topic, _, _ in messages))
+        self.assertTrue(all(payload == "" and retain for _, payload, retain in messages))
+        topics = {topic for topic, _, _ in messages}
+        self.assertIn(
+            "homeassistant/sensor/sgcc_xxxxxxxxx0123/balance/config",
+            topics,
+        )
+        self.assertIn(
+            "homeassistant/sensor/sgcc_xxxxxxxxx0123/daily_20260618/config",
+            topics,
+        )
+        self.assertIn(
+            "homeassistant/sensor/sgcc_xxxxxxxxx0123/monthly_202606/config",
+            topics,
+        )
+        self.assertIn(
+            "homeassistant/sensor/sgcc_xxxxxxxxx0123/year_2026/config",
+            topics,
+        )
+        self.assertNotIn(account_no, "\n".join(topics))
+
 
 
 if __name__ == "__main__":

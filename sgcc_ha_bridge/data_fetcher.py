@@ -170,12 +170,18 @@ class DataFetcher:
 
             self._random_delay(1, 3)
             logging.info("开始使用 Path B 从 Vue/Vuex 状态抓取账户数据。")
-            account_data_list = Scraper(driver, diagnostic=diag).fetch_all()
+            scraper = Scraper(driver, diagnostic=diag)
+            account_data_list = scraper.fetch_all()
             if diag is not None:
                 diag.record_fetched_accounts(len(account_data_list))
             if not account_data_list:
                 raise Exception("Path B 未抓取到任何账户数据")
 
+            discovered_account_nos = {
+                account_data.account.account_no
+                for account_data in account_data_list
+                if account_data.account.account_no
+            }
             saved_count = 0
             for account_data in account_data_list:
                 user_id = account_data.account.account_no
@@ -266,12 +272,51 @@ class DataFetcher:
             session_status_after = final_check.status
             if diag is not None:
                 diag.record_session("after_fetch", final_check)
+
             store.finish_run(
                 run_id,
                 "success",
                 session_status_before=session_status_before,
                 session_status_after=session_status_after,
             )
+
+            try:
+                cleanup_account_nos: set[str] = set(self.config.IGNORE_USER_ID or [])
+                if scraper.account_set_authoritative and discovered_account_nos:
+                    deactivated_account_nos = store.reconcile_active_accounts(
+                        discovered_account_nos,
+                        run_id,
+                    )
+                    cleanup_account_nos.update(deactivated_account_nos)
+                    if deactivated_account_nos:
+                        logging.info(
+                            f"Path B 已将 {len(deactivated_account_nos)} 个本轮未出现的历史户号标记为 inactive。"
+                        )
+                else:
+                    logging.warning(
+                        "Path B 本轮账户枚举不完整，跳过历史户号核销，避免部分抓取误删有效账户。"
+                    )
+
+                if mqtt_pub is not None and mqtt_connected:
+                    for cleanup_account_no in sorted(cleanup_account_nos):
+                        cleanup_data = store.get_account_data(cleanup_account_no)
+                        if cleanup_data is None:
+                            continue
+                        cleanup_success = mqtt_pub.remove_account_data(cleanup_data)
+                        if diag is not None:
+                            diag.record_publish(
+                                cleanup_account_no,
+                                "mqtt_cleanup",
+                                cleanup_success,
+                                "ok" if cleanup_success else "remove_account_data returned false",
+                            )
+            except Exception as lifecycle_error:
+                if diag is not None:
+                    diag.record_error(lifecycle_error, stage="account_lifecycle")
+                logging.warning(
+                    f"账户 active 核销/MQTT 清理失败，抓取数据仍保留: {redact_text(lifecycle_error)}"
+                )
+
             logging.info(f"抓取运行 {run_id} 完成: success, 账户数={saved_count}, 会话={session_status_after}")
             clear_login_cooldown()
             fetch_status = "success"

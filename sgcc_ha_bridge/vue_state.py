@@ -34,6 +34,7 @@ CORE_WANTED_KEYS = (
     "NewtotalBillProvince",
     "optionalYearArray",
     "selectYear",
+    "selectValue",
     "listData",
 )
 
