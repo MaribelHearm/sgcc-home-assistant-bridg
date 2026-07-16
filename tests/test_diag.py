@@ -54,6 +54,27 @@ class DiagSwitchTestCase(unittest.TestCase):
         ):
             self.assertFalse(diag_enabled())
 
+    def test_runtime_reports_effective_debug_switch(self):
+        switch_cases = (
+            {"SGCC_DEBUG": "true", "SGCC_DIAG": "false", "DEBUG_MODE": "false"},
+            {"SGCC_DEBUG": "false", "SGCC_DIAG": "true", "DEBUG_MODE": "false"},
+            {"SGCC_DEBUG": "false", "SGCC_DIAG": "false", "DEBUG_MODE": "true"},
+        )
+        for env in switch_cases:
+            with self.subTest(env=env), patch.dict(os.environ, env, clear=False):
+                collector = DiagnosticCollector()
+                collector.record_runtime(stage="test")
+                self.assertEqual(collector.runtime["debug_mode"], "true")
+
+        with patch.dict(
+            os.environ,
+            {"SGCC_DEBUG": "false", "SGCC_DIAG": "false", "DEBUG_MODE": "false"},
+            clear=False,
+        ):
+            collector = DiagnosticCollector()
+            collector.record_runtime(stage="test")
+            self.assertEqual(collector.runtime["debug_mode"], "false")
+
     def test_legacy_diag_switch_keeps_legacy_output_directory(self):
         with patch.dict(
             os.environ,

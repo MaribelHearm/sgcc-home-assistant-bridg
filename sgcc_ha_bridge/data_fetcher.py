@@ -32,6 +32,11 @@ from .session import check_session
 from .store import Store
 
 _FETCH_LOCK = threading.Lock()
+_PATH_B_SESSION_ATTEMPTS = 2
+
+
+class SessionExpiredFetchError(Exception):
+    """Path B could not continue because the authenticated session expired."""
 
 
 class DataFetcher:
@@ -187,11 +192,12 @@ class DataFetcher:
                 diagnostic=diag,
                 network_recorder=network_recorder if network_started else None,
             )
-            account_data_list = scraper.fetch_all()
-            if diag is not None:
-                diag.record_fetched_accounts(len(account_data_list))
-            if not account_data_list:
-                raise Exception("Path B 未抓取到任何账户数据")
+            account_data_list = self._fetch_path_b_in_session(
+                scraper,
+                driver,
+                store,
+                diag,
+            )
 
             discovered_account_nos = {
                 account_data.account.account_no
@@ -303,7 +309,9 @@ class DataFetcher:
                         logging.warning(f"用户 [{masked_user_id}] MQTT 发布异常，已忽略: {redact_text(mqtt_error)}")
 
             if saved_count == 0:
-                raise Exception("Path B 抓取结果均为空或被忽略，未写入任何账户数据")
+                raise NonRetryableFetchError(
+                    "Path B 抓取结果没有可保存账户数据，已停止外层重试以避免重复登录"
+                )
 
             final_check = check_session(driver, "after_fetch")
             store.record_session_check(final_check)
@@ -412,6 +420,62 @@ class DataFetcher:
                 except Exception as diag_error:
                     logging.warning(f"SGCC DIAG 输出失败，已忽略: {redact_text(diag_error)}")
             _FETCH_LOCK.release()
+
+    def _fetch_path_b_in_session(self, scraper, driver, store, diag=None):
+        """Retry transient empty Path B results without creating another login session."""
+        last_status = "unknown"
+        for attempt in range(1, _PATH_B_SESSION_ATTEMPTS + 1):
+            account_data_list = scraper.fetch_all()
+            if diag is not None:
+                diag.record_fetched_accounts(len(account_data_list))
+
+            eligible_accounts = [
+                account_data
+                for account_data in account_data_list
+                if account_data.account.account_no not in self.config.IGNORE_USER_ID
+            ]
+            useful_accounts = [
+                account_data
+                for account_data in eligible_accounts
+                if has_useful_account_data(account_data)
+            ]
+            if useful_accounts:
+                return account_data_list
+
+            if account_data_list and not eligible_accounts:
+                raise NonRetryableFetchError(
+                    "Path B 返回的账户均被 IGNORE_USER_ID 忽略，已停止本轮抓取"
+                )
+
+            session_check = check_session(driver, f"path_b_empty_attempt_{attempt}")
+            store.record_session_check(session_check)
+            last_status = session_check.status
+            if diag is not None:
+                diag.record_session(f"path_b_empty_attempt_{attempt}", session_check)
+                diag.record_timeline(
+                    "path_b_empty",
+                    attempt=attempt,
+                    account_count=len(account_data_list),
+                    eligible_count=len(eligible_accounts),
+                    session_status=session_check.status,
+                )
+
+            if session_check.status == "expired":
+                raise SessionExpiredFetchError(
+                    f"Path B 第 {attempt} 次未获得业务数据，且当前 session 已过期"
+                )
+
+            if attempt < _PATH_B_SESSION_ATTEMPTS:
+                logging.warning(
+                    f"Path B 第 {attempt} 次未获得有效业务数据，session={session_check.status}；"
+                    "将在当前已认证浏览器会话内再尝试一次，不重新登录。"
+                )
+                self._random_delay(1, 3)
+
+        raise NonRetryableFetchError(
+            f"Path B 在当前会话内连续 {_PATH_B_SESSION_ATTEMPTS} 次未获得有效业务数据，"
+            f"session={last_status}；已停止外层重试以避免重复登录"
+        )
 
     def _record_skipped_busy_run(self, trigger_type: str) -> Optional[int]:
         try:

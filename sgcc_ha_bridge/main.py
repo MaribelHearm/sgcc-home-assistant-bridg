@@ -496,7 +496,7 @@ def run_task(data_fetcher: DataFetcher, trigger_type: str = "manual"):
             return
         except NonRetryableFetchError as e:
             logging.error(
-                f"状态刷新任务遇到不可立即重试的登录/风控失败，已停止本轮重试: "
+                f"状态刷新任务遇到不可立即重试的失败，已停止本轮重试: "
                 f"[{data_fetcher._redact_text(e)}]"
             )
             return

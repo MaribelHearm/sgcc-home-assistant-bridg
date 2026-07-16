@@ -144,7 +144,7 @@ class DiagnosticCollector:
             "trigger_type": self.trigger_type,
             "publisher": publisher or getattr(config, "PUBLISHER", None),
             "browser_mode": os.getenv("SGCC_BROWSER_MODE", "local"),
-            "debug_mode": os.getenv("DEBUG_MODE", "false"),
+            "debug_mode": str(debug_enabled()).lower(),
             "env": _safe_env_snapshot(),
         })
         if config is not None:
