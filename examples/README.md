@@ -14,7 +14,7 @@
 
 ## 使用前需要替换
 
-示例中的实体 ID 是占位值。先在 Home Assistant 中确认实际 `sensor.sgcc_<末四位_稳定摘要>_*` 实体，再替换整段实体 ID。
+示例中的实体 ID 是 canonical v2 占位值，例如 `sensor.sgcc_0123_e2161a7e19_balance`。先在 Home Assistant 中确认实际 `sensor.sgcc_<末四位_稳定摘要>_*` 实体，再把示例账户键 `0123_e2161a7e19` 整体替换成自己的账户键；它不是完整户号，也不要只填写末四位。
 
 如果使用 `custom:sgcc-electricity-card`，需要把：
 

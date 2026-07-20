@@ -10,6 +10,11 @@ from .cache_validity import has_useful_account_data
 from .config import FetcherConfig
 from .const import LOGIN_URL
 from .diag import DiagnosticCollector, debug_enabled
+from .entity_identity import (
+    legacy_alias_policy,
+    mqtt_legacy_action,
+    mqtt_remove_legacy_on_cleanup,
+)
 from .error_watcher import ErrorWatcher
 from .ha_mapping import account_data_summary, account_data_to_update_args, with_history_daily_if_empty
 from .login import SgccLogin
@@ -66,6 +71,19 @@ class DataFetcher:
         """添加随机延迟，使自动化操作更难被检测。"""
         delay = random.uniform(min_seconds, max_seconds)
         time.sleep(delay)
+
+    def _mqtt_legacy_policy(
+        self,
+        account_nos,
+        *,
+        published_account_nos,
+        authoritative: bool,
+    ):
+        return legacy_alias_policy(
+            account_nos,
+            published_account_nos=published_account_nos,
+            authoritative=authoritative,
+        )
 
     def fetch(self, trigger_type: str = "manual"):
 
@@ -212,6 +230,20 @@ class DataFetcher:
                 for account_data in account_data_list
                 if account_data.account.account_no
             }
+            published_account_nos = {
+                account_data.account.account_no
+                for account_data in account_data_list
+                if (
+                    account_data.account.account_no
+                    and account_data.account.account_no not in self.config.IGNORE_USER_ID
+                    and has_useful_account_data(account_data)
+                )
+            }
+            mqtt_legacy_policy = self._mqtt_legacy_policy(
+                discovered_account_nos,
+                published_account_nos=published_account_nos,
+                authoritative=bool(scraper.account_set_authoritative),
+            )
             saved_count = 0
             for account_data in account_data_list:
                 user_id = account_data.account.account_no
@@ -296,7 +328,14 @@ class DataFetcher:
                             if diag is not None:
                                 diag.record_publish(user_id, "mqtt", False, "not_connected")
                         else:
-                            mqtt_success = bool(mqtt_pub.publish_account_data(publish_account_data))
+                            mqtt_success = bool(mqtt_pub.publish_account_data(
+                                publish_account_data,
+                                legacy_action=mqtt_legacy_action(
+                                    self.config.MQTT_LEGACY_DISCOVERY_MODE,
+                                    user_id,
+                                    mqtt_legacy_policy,
+                                ),
+                            ))
                             if diag is not None:
                                 diag.record_publish(
                                     user_id,
@@ -356,7 +395,14 @@ class DataFetcher:
                         cleanup_data = store.get_account_data(cleanup_account_no)
                         if cleanup_data is None:
                             continue
-                        cleanup_success = mqtt_pub.remove_account_data(cleanup_data)
+                        cleanup_success = mqtt_pub.remove_account_data(
+                            cleanup_data,
+                            remove_legacy=mqtt_remove_legacy_on_cleanup(
+                                self.config.MQTT_LEGACY_DISCOVERY_MODE,
+                                cleanup_account_no,
+                                mqtt_legacy_policy,
+                            ),
+                        )
                         if diag is not None:
                             diag.record_publish(
                                 cleanup_account_no,

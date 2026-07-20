@@ -11,7 +11,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 当前状态：
 
 - 预构建镜像先支持 `amd64`。
-- 当前 Add-on 版本 `v0.1.7`，默认使用官方 Google Chrome `browser-service` 模式。
+- 当前 Add-on 版本 `v0.1.8`，默认使用官方 Google Chrome `browser-service` 模式。
 - Add-on 是单容器部署，镜像内已经包含官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动。
 - 真实国网账号抓取、LLM 验证码和 MQTT 发布建议按自己的账号环境再跑一轮。
@@ -63,12 +63,13 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `LLM_BASE_URL` | OpenAI 兼容多模态接口 Base URL。 |
 | `LLM_API_KEY` | OpenAI 兼容多模态接口 Key。 |
 | `LLM_MODEL` | 多模态模型名或火山方舟 `ep-...` 接入点 ID。 |
-| `PUBLISHER` | 推荐 `mqtt`，只生成 MQTT Discovery 设备实体；需要兼容旧仪表盘/自动化时再改为 `both`。 |
+| `PUBLISHER` | 发布方式：`mqtt`、`rest` 或 `both`；推荐 `mqtt`。旧 MQTT 实体兼容不要求改为 `both`。 |
 | `MQTT_HOST` | MQTT broker 地址。 |
 | `MQTT_PORT` | MQTT broker 端口，通常是 `1883`。 |
 | `MQTT_USERNAME` | MQTT 用户名，可留空。 |
 | `MQTT_PASSWORD` | MQTT 密码，可留空。 |
 | `MQTT_DISCOVERY_PREFIX` | 通常保持 `homeassistant`。 |
+| `MQTT_LEGACY_DISCOVERY_MODE` | v0.1.8 旧实体迁移模式，默认 `compat`；旧消费者全部迁移前不要改成 `cleanup`。 |
 | `SGCC_DEBUG` | 提交 issue 前可临时设为 `true`；写入 `/data/debug/latest/sgcc-debug-bundle.zip` 完整脱敏取证包。 |
 | `SGCC_DIAG` | 旧诊断开关兼容别名，等价于 `SGCC_DEBUG`。 |
 | `SGCC_BROWSER_MODE` | 默认 `browser-service`；如需回滚旧 Chromium 模式，可改为 `local`。 |
@@ -143,6 +144,8 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 - `daily_YYYYMMDD` 日历史实体
 - `monthly_YYYYMM` 月历史实体
 
+canonical MQTT 实体默认使用 `sensor.sgcc_<末四位_稳定摘要>_<key>`，例如 `sensor.sgcc_0123_e2161a7e19_balance`。从 v0.1.5 或更早版本升级时保持 `MQTT_LEGACY_DISCOVERY_MODE=compat`，程序会自动恢复无冲突的旧 MQTT Discovery 身份；不需要 HA API，也不需要把 `PUBLISHER` 改成 `both`。同一账号有多个户号末四位相同时，旧身份无法区分归属，只保留各自 canonical 实体。消费者迁完前不要启用 `cleanup`，详见 [`v0.1.8 实体身份兼容与迁移`](../docs/entity-identity-migration.md)。
+
 ## 常见问题
 
 ### 找不到 Add-on/App
@@ -154,7 +157,7 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 ### 安装失败
 
 - 检查 HAOS/Supervisor 能否拉取 GHCR 镜像。
-- 镜像为：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.7`
+- 镜像为：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.8`
 - 国内网络如果拉取 GHCR 很慢，可以先确认 HAOS/Supervisor 能访问 GHCR；当前 Add-on 默认使用 GHCR app 镜像。
 
 ### 验证码/登录未通过

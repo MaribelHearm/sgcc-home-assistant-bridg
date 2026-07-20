@@ -73,8 +73,8 @@ SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:lates
 固定版本可以使用：
 
 ```env
-SGCC_APP_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.7
-SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:v0.1.7
+SGCC_APP_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.8
+SGCC_BROWSER_IMAGE=ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser:v0.1.8
 ```
 
 Compose 使用 `browser-service` 时，app/browser 两个镜像建议固定到同一个 tag，避免 app 内 ChromeDriver 与 browser-service Chrome 版本不一致。
@@ -102,13 +102,13 @@ SGCC_BROWSER_IMAGE=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/ma
 latest                 # 跟随 main 分支
 main                   # main 分支构建
 sha-xxxxxxx            # 提交短 SHA
-v0.1.7                 # Git tag 发布后生成同名版本 tag
+v0.1.8                 # Git tag 发布后生成同名版本 tag
 
 # browser-service 镜像；与 app 共用公开仓库，使用 browser-* 前缀
 browser-latest
 browser-main
 browser-sha-xxxxxxx
-browser-v0.1.7
+browser-v0.1.8
 ```
 
 例如：
@@ -116,8 +116,8 @@ browser-v0.1.7
 ```text
 crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:main
 crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-main
-crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:v0.1.7
-crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-v0.1.7
+crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:v0.1.8
+crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha:browser-v0.1.8
 ```
 
 本仓库默认分支为 `main`。CI 会同时发布 GHCR app/browser 镜像；阿里云 ACR 使用同一个公开 `sgcc_ha` 仓库发布 app 普通 tag 和 browser `browser-*` tag。
@@ -182,8 +182,8 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 说明：
 
 - 当前预构建镜像只发布 `amd64`，所以 `config.yaml` 也先只声明 `amd64`。
-- `config.yaml` 的 `version` 使用 `v0.1.7`，与 GHCR tag 对齐。
-- Add-on/App 使用 GHCR app 镜像：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.7`。
+- `config.yaml` 的 `version` 使用 `v0.1.8`，与 GHCR tag 对齐。
+- Add-on/App 使用 GHCR app 镜像：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.8`。
 - Add-on/App 是单容器部署，镜像内已经安装官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。
 - Add-on/App 默认 `SGCC_BROWSER_MODE=browser-service`，入口脚本会启动内嵌 browser manager；Chrome 本体只在抓取/登录时按需启动，任务结束后默认关闭。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动；真实国网登录、LLM 验证码和 MQTT 发布仍建议按自己的账号环境跑一轮。
@@ -229,6 +229,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `MQTT_USERNAME` | MQTT 用户名，可留空。 |
 | `MQTT_PASSWORD` | MQTT 密码，可留空。 |
 | `MQTT_DISCOVERY_PREFIX` | Home Assistant MQTT Discovery 前缀，默认 `homeassistant`。 |
+| `MQTT_LEGACY_DISCOVERY_MODE` | MQTT 旧实体迁移模式：`compat`（默认）为末四位唯一的账户恢复 v0.1.5 Discovery 别名；`off` 不创建也不删除旧 Discovery；`cleanup` 在 canonical v2 成功后删除旧 Discovery。所有旧消费者迁移完成前不要使用 `cleanup`。 |
 | `SGCC_DB_PATH` | SQLite 数据库路径，默认 `/data/sgcc.sqlite3`。 |
 | `SCRAPER_SETTLE_SECONDS` | Path B 抓取等待 Vuex/组件数据稳定的秒数。 |
 | `SGCC_DEBUG` | 完整 Debug 取证模式，默认 `false`；生产解析始终使用相同的轻量 observation，完整 Component/DOM 仅进入诊断取证，因此开启前后抓取和发布结果保持一致。 |
@@ -238,7 +239,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `SGCC_DIAG` | 旧诊断开关兼容别名；设为 `true` 等价于 `SGCC_DEBUG=true`。 |
 | `SGCC_DIAG_DIR` | 旧诊断目录兼容配置；未设置 `SGCC_DEBUG_DIR` 时使用。 |
 | `DEBUG_MODE` | 旧环境变量兼容别名；仅开启 Debug，不再切换手机验证码登录。 |
-| `SGCC_CLEANUP_LEGACY_ENTITY_IDS` | 设为 `true` 时清理旧版仅使用户号末四位的 REST entity；默认 `false`，用于完成仪表盘迁移后的一次性清理。 |
+| `SGCC_CLEANUP_LEGACY_ENTITY_IDS` | 设为 `true` 时清理旧版仅使用户号末四位的 REST entity；默认 `false`，用于完成 REST 消费者迁移后的一次性清理。它不影响 MQTT；MQTT 使用 `MQTT_LEGACY_DISCOVERY_MODE=cleanup`。 |
 | `PUSH_TIMEOUT` | PushPlus、URL 通知和二维码通知的 HTTP 超时秒数，默认 `10`；通知失败不会改变国网抓取或 HA/MQTT 发布状态。 |
 | `SGCC_LOGIN_METHOD` | 主登录方式；默认 `password`。显式设为 `phone-code` 时直接执行短信验证码登录，验证码可从 Telegram 当前提示消息的回复中获取；交互式终端仍可本地输入。 |
 | `REPUBLISH_INTERVAL_MINUTES` | 已有数据重发布或补抓的间隔分钟数。 |
@@ -333,15 +334,23 @@ SGCC_LOGIN_FALLBACK_UNATTENDED=false
 
 当 `PUBLISHER=mqtt` 或 `PUBLISHER=both` 且 MQTT broker 可用时，程序会向 `MQTT_DISCOVERY_PREFIX` 发布 discovery 配置。Home Assistant 会自动出现一个“国网电费 ****后四位”的 device。
 
-推荐使用 `PUBLISHER=mqtt`，此时只生成 MQTT Discovery 设备实体。`PUBLISHER=both` 会同时发布 MQTT Discovery 和 REST state；两条发布路径共用同一个 `末四位_稳定摘要` 账户身份，避免多户号覆盖。
+推荐使用 `PUBLISHER=mqtt`，此时只生成 MQTT Discovery 设备实体。`PUBLISHER=both` 会同时发布 MQTT Discovery 和 REST state；`PUBLISHER=rest` 仍可只发布 REST。三种方式均继续支持，MQTT 旧实体兼容不要求使用 REST 或 HA API。
 
-如果升级后 HA 仍残留旧的 `unavailable` / `unknown` 实体，可以在 HA 的“设置 → 设备与服务 → 实体”中手动删除旧实体，或清理旧 MQTT retained discovery。
+户号在实体名称和日志中只显示末四位。canonical MQTT topic、`unique_id`、`object_id`、`default_entity_id` 和 REST entity 后缀使用 `末四位_稳定摘要`，例如 `0123_e2161a7e19`；两个户号即使末四位相同，也会生成不同身份。完整户号不会进入发布 payload。canonical MQTT Discovery 请求的默认实体 ID 是 `sensor.sgcc_<entity-key>_<key>`，例如 `sensor.sgcc_0123_e2161a7e19_balance`。`unique_id` 决定 Home Assistant registry 中的集成身份；`default_entity_id` 是建议命名；已有 registry 记录、用户重命名或名称冲突仍可能让实际 `entity_id` 不同，因此最终以 HA 实体注册表为准，不要把 `_2` 固化为上游契约。
 
-户号在实体名称和日志中只显示末四位。MQTT topic、`unique_id`、`object_id` 和 REST entity 后缀使用 `末四位_稳定摘要`，例如 `0123_e2161a7e19`；两个户号即使末四位相同，也会生成不同身份。完整户号不会进入发布 payload。实际 entity id 由 Home Assistant 实体注册表生成，请以 HA 实际显示为准。
+### v0.1.5 及更早版本升级
 
-从仅使用末四位的旧版本升级后，Home Assistant 会出现一组新的唯一实体。先把仪表盘和自动化切换到新实体；REST 发布用户随后可临时设置 `SGCC_CLEANUP_LEGACY_ENTITY_IDS=true` 运行一次，清理旧 REST state。MQTT publisher 在新实体成功发布后，自动清除本次账户数据对应的旧 retained Discovery 配置；新发布失败时保留旧实体。
+v0.1.6 引入 canonical v2 身份后曾自动删除旧 MQTT retained Discovery，仍引用旧实体的仪表盘和自动化可能失效。v0.1.8 默认使用 `MQTT_LEGACY_DISCOVERY_MODE=compat`：先发布 canonical v2，再在完整、权威的账户集合证明末四位唯一时恢复原 v0.1.5 `unique_id`/Discovery 身份。旧别名复用 canonical state/attributes topic，不是第二份状态源；该自愈路径不需要 Home Assistant API。
 
-旧 REST 状态兜底会从当天缓存读取完整 13 位户号，再生成新的稳定身份。旧实体仍只能按末四位读取；当缓存中多个户号末四位相同时，这批旧状态没有可证明的账户归属，程序会跳过兜底并执行一次真实国网抓取。
+- `compat`（默认）：恢复无冲突旧别名；同尾号冲突时撤销歧义别名，只保留独立 canonical 实体。
+- `off`：只发布 canonical v2，既不创建也不删除旧 retained Discovery。
+- `cleanup`：canonical v2 成功后 tombstone 旧 MQTT Discovery。仅在 Lovelace、自动化、脚本和其他消费者全部迁移后使用。
+
+被 `IGNORE_USER_ID` 忽略的账户仍参与末四位冲突判断，但不会成为旧别名 owner。非权威/不完整枚举不会新建或删除旧别名，避免部分抓取误伤。账户失效或被忽略时，程序仍清理 canonical Discovery，并仅在策略证明安全时处理旧 namespace。
+
+旧 REST 状态兜底会从当天缓存读取完整 13 位户号，再生成新的稳定身份。旧实体仍只能按末四位读取；当缓存中多个户号末四位相同时，这批旧状态没有可证明的账户归属，程序会跳过兜底并执行一次真实国网抓取。REST 旧实体清理由独立的 `SGCC_CLEANUP_LEGACY_ENTITY_IDS` 控制，默认关闭，不与 MQTT 模式联动。
+
+普通升级保持 `compat` 即可；通过 HA UI/API 把 canonical 实体重命名为整洁 ID 是可选高级路径。完整迁移顺序、验证和回滚见 [v0.1.8 实体身份兼容与迁移](docs/entity-identity-migration.md)。
 
 | 类型 | Discovery key | 显示名称示例 | 说明 |
 | --- | --- | --- | --- |
@@ -376,7 +385,7 @@ examples/basic/lovelace-sgcc-electricity.yaml
 
 1. Home Assistant → 仪表盘 → 编辑仪表盘 → 添加视图/原始配置。
 2. 粘贴示例内容作为一个 view。
-3. 在 Home Assistant 开发者工具中确认本次生成的实际实体 ID，再替换示例实体。新实体身份包含户号末四位和稳定摘要。
+3. 在 Home Assistant 开发者工具中确认本次生成的实际实体 ID，再替换示例实体。canonical 目标格式为 `sensor.sgcc_<末四位_稳定摘要>_<key>`；已有 registry 记录可能保留其他名称，请以 HA 实际显示为准。
 4. 日/月历史实体按 HA 实际出现的数据范围增删。
 
 `sgcc-electricity-card-xiaoshi-original.yaml`、`sgcc-electricity-card-xiaoshi-style.yaml` 和 `sgcc-electricity-card.yaml` 都已经替换成本项目实体字段，截图放在 `assets/lovelace-cards/`。其中 `sgcc-electricity-card.yaml` 来自当前自用页面 `/sgcc-electricity/overview`，依赖 `stack-in-card`、`mushroom`、`apexcharts-card` 和 `card-mod`。

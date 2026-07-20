@@ -6,6 +6,8 @@
 python tools/convert_state_grid_lovelace.py input.yaml output.yaml --account-no 你的13位户号
 ```
 
+脚本会在本机根据完整户号计算 canonical `末四位_稳定摘要` 账户键；完整户号不会写入输出。已经从 Home Assistant 确认账户键时，也可以改用 `--entity-key <末四位_稳定摘要>`。
+
 转换后请检查自定义 `data_generator` 或模板里读取的字段名。
 
 详细说明见 [../../docs/state-grid-lovelace-migration.md](../../docs/state-grid-lovelace-migration.md)。

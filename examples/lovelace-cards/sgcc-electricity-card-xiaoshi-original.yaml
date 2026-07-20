@@ -1,7 +1,7 @@
 # SGCC Home Assistant Bridge - 消逝原版风格卡片示例
 # 需要把 examples/custom-cards/sgcc-electricity-card.js 放到 HA /config/www/sgcc/，
 # 并在 Lovelace resources 添加 /local/sgcc/sgcc-electricity-card.js，类型 module。
-# 示例账户键为 `4840_0123456789`；在 Home Assistant 中确认本次生成的完整实体 ID，并整体替换该账户键。
+# 示例账户键为 `0123_e2161a7e19`；在 Home Assistant 中确认本次生成的完整实体 ID，并整体替换该账户键。
 # 这份是 xiaoshi 原版卡片思路的本项目字段预设，不依赖 sensor.state_grid_<户号>。
 
 title: 消逝电力卡片
@@ -12,20 +12,20 @@ cards:
   - type: custom:sgcc-electricity-card
     variant: xiaoshi-original
     title: 国网电费
-    account_label: 户号 ****4840
-    history_entity: sensor.sgcc_4840_0123456789_history
-    month_usage_entity: sensor.sgcc_4840_0123456789_month_usage
-    month_charge_entity: sensor.sgcc_4840_0123456789_month_charge
-    latest_daily_entity: sensor.sgcc_4840_0123456789_last_daily_usage
-    balance_entity: sensor.sgcc_4840_0123456789_balance
-    arrears_entity: sensor.sgcc_4840_0123456789_arrears
-    prepay_entity: sensor.sgcc_4840_0123456789_prepay_balance
-    year_usage_entity: sensor.sgcc_4840_0123456789_year_usage
-    year_charge_entity: sensor.sgcc_4840_0123456789_year_charge
+    account_label: 户号 ****0123
+    history_entity: sensor.sgcc_0123_e2161a7e19_history
+    month_usage_entity: sensor.sgcc_0123_e2161a7e19_month_usage
+    month_charge_entity: sensor.sgcc_0123_e2161a7e19_month_charge
+    latest_daily_entity: sensor.sgcc_0123_e2161a7e19_last_daily_usage
+    balance_entity: sensor.sgcc_0123_e2161a7e19_balance
+    arrears_entity: sensor.sgcc_0123_e2161a7e19_arrears
+    prepay_entity: sensor.sgcc_0123_e2161a7e19_prepay_balance
+    year_usage_entity: sensor.sgcc_0123_e2161a7e19_year_usage
+    year_charge_entity: sensor.sgcc_0123_e2161a7e19_year_charge
     tou_entities:
-      valley: sensor.sgcc_4840_0123456789_month_valley
-      flat: sensor.sgcc_4840_0123456789_month_flat
-      peak: sensor.sgcc_4840_0123456789_month_peak
-      tip: sensor.sgcc_4840_0123456789_month_tip
+      valley: sensor.sgcc_0123_e2161a7e19_month_valley
+      flat: sensor.sgcc_0123_e2161a7e19_month_flat
+      peak: sensor.sgcc_0123_e2161a7e19_month_peak
+      tip: sensor.sgcc_0123_e2161a7e19_month_tip
     daily_days: 31
     monthly_months: 12

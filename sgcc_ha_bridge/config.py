@@ -1,5 +1,20 @@
+import logging
 import os
 from dataclasses import dataclass, field
+
+
+_MQTT_LEGACY_DISCOVERY_MODES = {"compat", "off", "cleanup"}
+
+
+def _mqtt_legacy_discovery_mode() -> str:
+    value = os.getenv("MQTT_LEGACY_DISCOVERY_MODE", "compat").strip().lower()
+    if value in _MQTT_LEGACY_DISCOVERY_MODES:
+        return value
+    logging.warning(
+        "未知 MQTT_LEGACY_DISCOVERY_MODE=%r，回退为 compat。",
+        value,
+    )
+    return "compat"
 
 
 @dataclass
@@ -19,6 +34,7 @@ class FetcherConfig:
     MQTT_USERNAME: str = ""
     MQTT_PASSWORD: str = ""
     MQTT_DISCOVERY_PREFIX: str = "homeassistant"
+    MQTT_LEGACY_DISCOVERY_MODE: str = "compat"
 
     @classmethod
     def from_env(cls) -> "FetcherConfig":
@@ -50,4 +66,5 @@ class FetcherConfig:
             MQTT_USERNAME=os.getenv("MQTT_USERNAME", ""),
             MQTT_PASSWORD=os.getenv("MQTT_PASSWORD", ""),
             MQTT_DISCOVERY_PREFIX=os.getenv("MQTT_DISCOVERY_PREFIX", "homeassistant"),
+            MQTT_LEGACY_DISCOVERY_MODE=_mqtt_legacy_discovery_mode(),
         )

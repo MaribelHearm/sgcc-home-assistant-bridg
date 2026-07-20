@@ -156,6 +156,11 @@ class DiagnosticCollector:
                 "mqtt_host": redact_text(getattr(config, "MQTT_HOST", "") or ""),
                 "mqtt_port": getattr(config, "MQTT_PORT", None),
                 "mqtt_discovery_prefix": getattr(config, "MQTT_DISCOVERY_PREFIX", None),
+                "mqtt_legacy_discovery_mode": getattr(
+                    config,
+                    "MQTT_LEGACY_DISCOVERY_MODE",
+                    None,
+                ),
             }
 
     def record_session(self, stage: str, check: Any) -> None:
@@ -665,6 +670,7 @@ def _safe_env_snapshot() -> dict[str, Any]:
         "MQTT_HOST",
         "MQTT_PORT",
         "MQTT_DISCOVERY_PREFIX",
+        "MQTT_LEGACY_DISCOVERY_MODE",
         "JOB_START_TIME",
         "SGCC_DAILY_JITTER_MINUTES",
         "SGCC_DAILY_RUNS",

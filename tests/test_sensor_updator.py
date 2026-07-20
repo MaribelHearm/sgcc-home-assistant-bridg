@@ -90,7 +90,51 @@ class SensorUpdatorCacheValuesTestCase(unittest.TestCase):
                 failed.calls,
             )
 
-    def test_notification_exception_does_not_block_rest_publish(self):
+    def test_legacy_rest_cleanup_retries_after_partial_delete_failure(self):
+        account_no = "1234567890123"
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch.dict(
+            "os.environ",
+            {"SGCC_CLEANUP_LEGACY_ENTITY_IDS": "true"},
+        ):
+            updator = CacheOnlySensorUpdator(Path(tmpdir) / "retry.json")
+            original_delete = updator.delete_sensor_state
+            failed_once = False
+
+            def fail_one_legacy_delete(sensor_name):
+                nonlocal failed_once
+                original_delete(sensor_name)
+                if sensor_name.endswith("_0123") and not failed_once:
+                    failed_once = True
+                    return False
+                return True
+
+            updator.delete_sensor_state = fail_one_legacy_delete
+            update_args = {
+                "user_id": account_no,
+                "balance": 88.0,
+                "last_daily_date": None,
+                "last_daily_usage": None,
+                "yearly_charge": None,
+                "yearly_usage": None,
+                "month_charge": None,
+                "month_usage": None,
+            }
+
+            self.assertTrue(updator.update_one_userid(**update_args))
+            first_cleanup_count = sum(
+                call == ("delete", BALANCE_SENSOR_NAME + "_0123")
+                for call in updator.calls
+            )
+            self.assertNotIn(account_no, updator._legacy_entity_cleanup_done)
+
+            self.assertTrue(updator.update_one_userid(**update_args))
+            second_cleanup_count = sum(
+                call == ("delete", BALANCE_SENSOR_NAME + "_0123")
+                for call in updator.calls
+            )
+            self.assertGreater(second_cleanup_count, first_cleanup_count)
+            self.assertIn(account_no, updator._legacy_entity_cleanup_done)
+
         with tempfile.TemporaryDirectory() as tmpdir:
             updator = CacheOnlySensorUpdator(Path(tmpdir) / "sgcc_cache.json")
 

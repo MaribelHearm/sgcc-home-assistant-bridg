@@ -2,7 +2,7 @@
 # 来源：真实 Home Assistant 页面 /sgcc-electricity/overview
 # 依赖 HACS / 自定义卡片：stack-in-card、mushroom、apexcharts-card、card-mod。
 # 背景图 /local/sgcc/bg-nord-blur.jpg 可按需替换或删除。
-# 示例账户键为 `4840_0123456789`；在 Home Assistant 中确认本次生成的完整实体 ID，并整体替换该账户键。
+# 示例账户键为 `0123_e2161a7e19`；在 Home Assistant 中确认本次生成的完整实体 ID，并整体替换该账户键。
 
 title: 国网电费
 path: overview
@@ -19,7 +19,7 @@ sections:
     cards:
     - type: custom:mushroom-template-card
       primary: 国网电费 · 用电监控
-      secondary: 户号 ****4840 · 更新至 {{ state_attr('sensor.sgcc_4840_0123456789_history','latest_daily_date') or state_attr('sensor.sgcc_4840_0123456789_last_daily_usage','date') }}
+      secondary: 户号 ****0123 · 更新至 {{ state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_daily_date') or state_attr('sensor.sgcc_0123_e2161a7e19_last_daily_usage','date') }}
       icon: mdi:transmission-tower
       icon_color: '#88c0d0'
       multiline_secondary: true
@@ -43,9 +43,9 @@ sections:
       square: false
       cards:
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_month_usage
-        primary: '{{ states(''sensor.sgcc_4840_0123456789_month_usage'') | float(0) | round(1) }} kWh'
-        secondary: 上月用电·{{ (state_attr('sensor.sgcc_4840_0123456789_month_usage','month') or state_attr('sensor.sgcc_4840_0123456789_history','latest_month') or '')[5:7] | int }}月
+        entity: sensor.sgcc_0123_e2161a7e19_month_usage
+        primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_month_usage'') | float(0) | round(1) }} kWh'
+        secondary: 上月用电·{{ (state_attr('sensor.sgcc_0123_e2161a7e19_month_usage','month') or state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_month') or '')[5:7] | int }}月
         icon: mdi:lightning-bolt
         icon_color: '#88c0d0'
         tap_action:
@@ -71,9 +71,9 @@ sections:
             }
             mushroom-shape-icon { --shape-color: rgba(136,192,208,0.10) !important; }
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_month_charge
-        primary: '{{ states(''sensor.sgcc_4840_0123456789_month_charge'') | float(0) | round(2) }} 元'
-        secondary: 上月电费·{{ (state_attr('sensor.sgcc_4840_0123456789_month_usage','month') or state_attr('sensor.sgcc_4840_0123456789_history','latest_month') or '')[5:7] | int }}月
+        entity: sensor.sgcc_0123_e2161a7e19_month_charge
+        primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_month_charge'') | float(0) | round(2) }} 元'
+        secondary: 上月电费·{{ (state_attr('sensor.sgcc_0123_e2161a7e19_month_usage','month') or state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_month') or '')[5:7] | int }}月
         icon: mdi:cash-multiple
         icon_color: '#ebcb8b'
         tap_action:
@@ -109,7 +109,7 @@ sections:
           }
           ha-card { padding: 0 !important; }
     - type: markdown
-      content: <div class='bill-note'>上月·{{ (state_attr('sensor.sgcc_4840_0123456789_month_usage','month') or state_attr('sensor.sgcc_4840_0123456789_history','latest_month') or '')[5:7] | int }}月 已出账</div>
+      content: <div class='bill-note'>上月·{{ (state_attr('sensor.sgcc_0123_e2161a7e19_month_usage','month') or state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_month') or '')[5:7] | int }}月 已出账</div>
       card_mod:
         style: |2
 
@@ -128,8 +128,8 @@ sections:
       square: false
       cards:
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_balance
-        primary: '{{ states(''sensor.sgcc_4840_0123456789_balance'') | float(0) | round(2) }} 元'
+        entity: sensor.sgcc_0123_e2161a7e19_balance
+        primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_balance'') | float(0) | round(2) }} 元'
         secondary: 电费余额
         icon: mdi:wallet-bifold
         icon_color: '#8fbcbb'
@@ -156,11 +156,11 @@ sections:
             }
             mushroom-shape-icon { --shape-color: rgba(136,192,208,0.10) !important; }
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_arrears
-        primary: '{{ states(''sensor.sgcc_4840_0123456789_arrears'') | float(0) | round(2) }} 元'
+        entity: sensor.sgcc_0123_e2161a7e19_arrears
+        primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_arrears'') | float(0) | round(2) }} 元'
         secondary: 应交金额
         icon: mdi:cash-clock
-        icon_color: '{{ ''#d08770'' if states(''sensor.sgcc_4840_0123456789_arrears'')|float(0) > 0 else ''#a3be8c'' }}'
+        icon_color: '{{ ''#d08770'' if states(''sensor.sgcc_0123_e2161a7e19_arrears'')|float(0) > 0 else ''#a3be8c'' }}'
         tap_action:
           action: more-info
         card_mod:
@@ -214,9 +214,9 @@ sections:
       square: false
       cards:
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_history
-        primary: '{% set h=''sensor.sgcc_4840_0123456789_history'' %}{% set ym=(state_attr(h,''latest_daily_date'') or '''')[:7] %}{% set d=state_attr(h,''daily'') or [] %}{{ d|selectattr(''date'',''match'',ym)|map(attribute=''usage_kwh'')|map(''float'',0)|sum|round(1) }} kWh'
-        secondary: 本月用电 · 累计至 {{ state_attr('sensor.sgcc_4840_0123456789_history','latest_daily_date') or state_attr('sensor.sgcc_4840_0123456789_last_daily_usage','date') }}
+        entity: sensor.sgcc_0123_e2161a7e19_history
+        primary: '{% set h=''sensor.sgcc_0123_e2161a7e19_history'' %}{% set ym=(state_attr(h,''latest_daily_date'') or '''')[:7] %}{% set d=state_attr(h,''daily'') or [] %}{{ d|selectattr(''date'',''match'',ym)|map(attribute=''usage_kwh'')|map(''float'',0)|sum|round(1) }} kWh'
+        secondary: 本月用电 · 累计至 {{ state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_daily_date') or state_attr('sensor.sgcc_0123_e2161a7e19_last_daily_usage','date') }}
         icon: mdi:calendar-month
         icon_color: '#88c0d0'
         tap_action:
@@ -281,9 +281,9 @@ sections:
           }
           ha-card { padding: 0 !important; }
     - type: custom:mushroom-template-card
-      entity: sensor.sgcc_4840_0123456789_last_daily_usage
-      primary: '{{ states(''sensor.sgcc_4840_0123456789_last_daily_usage'') | float(0) | round(2) }} kWh'
-      secondary: 最近日用电 · {{ state_attr('sensor.sgcc_4840_0123456789_last_daily_usage','date') or state_attr('sensor.sgcc_4840_0123456789_history','latest_daily_date') }}
+      entity: sensor.sgcc_0123_e2161a7e19_last_daily_usage
+      primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_last_daily_usage'') | float(0) | round(2) }} kWh'
+      secondary: 最近日用电 · {{ state_attr('sensor.sgcc_0123_e2161a7e19_last_daily_usage','date') or state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_daily_date') }}
       icon: mdi:flash
       icon_color: '#81a1c1'
       tap_action:
@@ -368,7 +368,7 @@ sections:
           size: 3
           strokeWidth: 0
       series:
-      - entity: sensor.sgcc_4840_0123456789_history
+      - entity: sensor.sgcc_0123_e2161a7e19_history
         name: 日用电
         type: area
         unit: ' kWh'
@@ -483,7 +483,7 @@ sections:
             columnWidth: 42%
             borderRadius: 5
       series:
-      - entity: sensor.sgcc_4840_0123456789_history
+      - entity: sensor.sgcc_0123_e2161a7e19_history
         name: 月用电
         type: column
         unit: ' kWh'
@@ -530,7 +530,7 @@ sections:
       span:
         end: day
     - type: markdown
-      content: <div class='tou-note'>{{ state_attr('sensor.sgcc_4840_0123456789_month_valley','month') or state_attr('sensor.sgcc_4840_0123456789_history','latest_month') or '最新可用月份' }} 分时</div>
+      content: <div class='tou-note'>{{ state_attr('sensor.sgcc_0123_e2161a7e19_month_valley','month') or state_attr('sensor.sgcc_0123_e2161a7e19_history','latest_month') or '最新可用月份' }} 分时</div>
       card_mod:
         style: |2
 
@@ -546,16 +546,16 @@ sections:
     - type: distribution
       title: 分时用电
       entities:
-      - entity: sensor.sgcc_4840_0123456789_month_valley
+      - entity: sensor.sgcc_0123_e2161a7e19_month_valley
         name: 谷
         color: '#5e81ac'
-      - entity: sensor.sgcc_4840_0123456789_month_flat
+      - entity: sensor.sgcc_0123_e2161a7e19_month_flat
         name: 平
         color: '#81a1c1'
-      - entity: sensor.sgcc_4840_0123456789_month_peak
+      - entity: sensor.sgcc_0123_e2161a7e19_month_peak
         name: 峰
         color: '#ebcb8b'
-      - entity: sensor.sgcc_4840_0123456789_month_tip
+      - entity: sensor.sgcc_0123_e2161a7e19_month_tip
         name: 尖
         color: '#b48ead'
       card_mod:
@@ -576,8 +576,8 @@ sections:
       square: false
       cards:
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_year_usage
-        primary: '{{ states(''sensor.sgcc_4840_0123456789_year_usage'') | float(0) | round(1) }} kWh'
+        entity: sensor.sgcc_0123_e2161a7e19_year_usage
+        primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_year_usage'') | float(0) | round(1) }} kWh'
         secondary: 年度用电·2026
         icon: mdi:chart-timeline-variant
         icon_color: '#8fbcbb'
@@ -604,8 +604,8 @@ sections:
             }
             mushroom-shape-icon { --shape-color: rgba(136,192,208,0.10) !important; }
       - type: custom:mushroom-template-card
-        entity: sensor.sgcc_4840_0123456789_year_charge
-        primary: '{{ states(''sensor.sgcc_4840_0123456789_year_charge'') | float(0) | round(2) }} 元'
+        entity: sensor.sgcc_0123_e2161a7e19_year_charge
+        primary: '{{ states(''sensor.sgcc_0123_e2161a7e19_year_charge'') | float(0) | round(2) }} 元'
         secondary: 年度电费·2026
         icon: mdi:cash-check
         icon_color: '#ebcb8b'

@@ -5,7 +5,7 @@ class SgccElectricityCard extends HTMLElement {
     }
     this.config = {
       title: "国网电费",
-      account_label: "户号 ****4840",
+      account_label: "户号 ****0123",
       daily_days: 31,
       monthly_months: 12,
       ...config,

@@ -145,6 +145,7 @@ class SensorUpdator:
         if user_id in cleaned:
             return
         postfix = legacy_account_postfix(user_id)
+        cleanup_ok = True
         for sensor_base in (
             BALANCE_SENSOR_NAME,
             DAILY_USAGE_SENSOR_NAME,
@@ -160,12 +161,19 @@ class SensorUpdator:
             ARREARS_SENSOR_NAME,
         ):
             try:
-                self.delete_sensor_state(sensor_base + postfix)
+                if self.delete_sensor_state(sensor_base + postfix) is False:
+                    cleanup_ok = False
             except Exception as cleanup_error:
+                cleanup_ok = False
                 logging.warning(
                     f"[{_mask_user_id(user_id)}] 清理旧 Home Assistant 实体失败，已忽略: {cleanup_error}"
                 )
-        cleaned.add(user_id)
+        if cleanup_ok:
+            cleaned.add(user_id)
+        else:
+            logging.warning(
+                f"[{_mask_user_id(user_id)}] 旧 Home Assistant 实体未完全清理，后续发布将重试。"
+            )
 
     def _get_cache_file(self):
         from .const import get_data_dir

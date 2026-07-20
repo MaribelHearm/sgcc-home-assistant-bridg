@@ -1,6 +1,6 @@
 # Lovelace 卡片示例
 
-YAML 中的实体 ID 是占位示例。请在 Home Assistant 中选择本次实际生成的 `sensor.sgcc_<末四位_稳定摘要>_*` 实体；这里不自动安装卡片资源。
+YAML 中的实体 ID 是 canonical v2 占位示例，例如 `sensor.sgcc_0123_e2161a7e19_balance`。请在 Home Assistant 中选择本次实际生成的 `sensor.sgcc_<末四位_稳定摘要>_*` 实体，并把示例账户键 `0123_e2161a7e19` 整体替换；这里不自动安装卡片资源。
 
 ## 内置三套示例
 

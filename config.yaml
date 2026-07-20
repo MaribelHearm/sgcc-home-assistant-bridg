@@ -1,5 +1,5 @@
 name: "SGCC Home Assistant Bridge"
-version: "v0.1.7"
+version: "v0.1.8"
 slug: "sgcc_home_assistant_bridge"
 description: "国家电网 / SGCC / 95598 电费与用电数据 Home Assistant 桥接插件"
 url: "https://github.com/MaribelHearm/sgcc-home-assistant-bridg"
@@ -55,6 +55,7 @@ options:
   MQTT_USERNAME: ""
   MQTT_PASSWORD: ""
   MQTT_DISCOVERY_PREFIX: "homeassistant"
+  MQTT_LEGACY_DISCOVERY_MODE: "compat"
   SGCC_DB_PATH: "/data/sgcc.sqlite3"
   SCRAPER_SETTLE_SECONDS: 3.0
   SGCC_DEBUG: false
@@ -106,6 +107,7 @@ schema:
   MQTT_USERNAME: str?
   MQTT_PASSWORD: password?
   MQTT_DISCOVERY_PREFIX: str
+  MQTT_LEGACY_DISCOVERY_MODE: "list(compat|off|cleanup)"
   SGCC_DB_PATH: str
   SCRAPER_SETTLE_SECONDS: float(0,30)
   SGCC_DEBUG: bool

@@ -26,7 +26,6 @@ class MqttPublisher:
         self.discovery_prefix = self.config.MQTT_DISCOVERY_PREFIX or "homeassistant"
         self.client = None
         self.connected = False
-        self._legacy_cleanup_done: set[str] = set()
 
     def __enter__(self):
         self.connect()
@@ -74,10 +73,23 @@ class MqttPublisher:
         finally:
             self.connected = False
 
-    def publish_account_data(self, account_data: AccountData) -> bool:
+    def publish_account_data(
+        self,
+        account_data: AccountData,
+        *,
+        legacy_action: str = "none",
+    ) -> bool:
+        """Publish canonical v2 entities and an optional legacy action.
+
+        ``legacy_action`` is decided by a caller that has an authoritative
+        account set.  A single-account publisher cannot safely infer whether a
+        last-four legacy identity collides with another account.
+        """
         if self.client is None or not self.connected:
             logging.warning("MQTT 未连接，跳过发布。")
             return False
+        if legacy_action not in {"none", "publish", "remove"}:
+            raise ValueError(f"unsupported legacy_action: {legacy_action}")
 
         try:
             account_no = account_data.account.account_no
@@ -86,73 +98,137 @@ class MqttPublisher:
             if not has_useful_account_data(account_data):
                 logging.warning(f"MQTT 发布跳过户号 {masked}: 当前 AccountData 没有有效国网业务数据。")
                 return False
+
             node = self._safe_topic_part(f"sgcc_{entity_key}")
             device = {
                 "identifiers": [f"sgcc_{entity_key}"],
                 "name": f"国网电费 {masked}",
                 "manufacturer": "SGCC bridge",
             }
-
-            published_configs = 0
-            published_states = 0
-            for spec in self._sensor_specs(account_data, masked, device):
-                value = spec.pop("value")
-                key = spec.pop("key")
-                delete_when_none = spec.pop("delete_when_none", True)
-                state_topic = f"sgcc/{node}/{key}/state"
-                config_topic = f"{self.discovery_prefix}/sensor/{node}/{key}/config"
-                if value is None:
-                    if not delete_when_none:
-                        # Some stable aggregate sensors may be temporarily empty
-                        # around a month boundary before the first daily reading
-                        # for the new month arrives.  Keep their retained
-                        # discovery config intact instead of deleting the HA
-                        # entity and breaking dashboards that reference it.
-                        continue
-                    # MQTT Discovery retained configs without matching states leave
-                    # Home Assistant with unknown/unavailable entities.  Publish an
-                    # empty retained config to remove stale entities from earlier
-                    # versions, and do not recreate them until a real value exists.
-                    self._publish(config_topic, "", retain=True)
-                    continue
-                attributes = spec.pop("attributes", None)
-                payload = {
-                    "name": spec.pop("name"),
-                    "unique_id": f"sgcc_{entity_key}_{key}",
-                    "object_id": f"sgcc_{entity_key}_{key}",
-                    "state_topic": state_topic,
-                    "device": device,
-                }
-                if attributes is not None:
-                    payload["json_attributes_topic"] = f"sgcc/{node}/{key}/attributes"
-                payload.update({k: v for k, v in spec.items() if v is not None})
-                self._publish(config_topic, json.dumps(payload, ensure_ascii=False), retain=True)
-                published_configs += 1
-                if attributes is not None:
-                    self._publish(
-                        payload["json_attributes_topic"],
-                        json.dumps(attributes, ensure_ascii=False),
-                        retain=True,
-                    )
-                self._publish(state_topic, self._format_value(value), retain=True)
-                published_states += 1
+            specs = self._sensor_specs(account_data, masked, device)
+            published_configs, published_states = self._publish_canonical_specs(
+                specs,
+                entity_key=entity_key,
+                node=node,
+                device=device,
+            )
             if published_configs and not published_states:
                 logging.warning("MQTT Discovery 配置已发布，但当前账户数据没有可用状态值；本次 MQTT 发布不视为成功。")
             success = published_configs > 0 and published_states > 0
-            if success:
-                try:
-                    self._cleanup_legacy_discovery(account_data, masked)
-                except Exception as cleanup_error:
-                    logging.warning(
-                        f"MQTT 新实体已发布，旧版 Discovery 清理失败，保留旧实体等待下次重试: {cleanup_error}"
-                    )
-            return success
+            if not success:
+                return False
+
+            if legacy_action == "publish":
+                self._publish_legacy_aliases(
+                    account_data,
+                    masked=masked,
+                    canonical_node=node,
+                )
+            elif legacy_action == "remove":
+                self.remove_legacy_discovery(account_data)
+            return True
         except Exception as e:
             logging.warning(f"MQTT 发布失败: {e}")
             return False
 
-    def remove_account_data(self, account_data: AccountData) -> bool:
-        """Remove every retained MQTT Discovery entity for one account."""
+    def _publish_canonical_specs(
+        self,
+        specs: list[dict[str, Any]],
+        *,
+        entity_key: str,
+        node: str,
+        device: dict[str, Any],
+    ) -> tuple[int, int]:
+        published_configs = 0
+        published_states = 0
+        for source_spec in specs:
+            spec = dict(source_spec)
+            value = spec.pop("value")
+            key = spec.pop("key")
+            delete_when_none = spec.pop("delete_when_none", True)
+            state_topic = f"sgcc/{node}/{key}/state"
+            config_topic = f"{self.discovery_prefix}/sensor/{node}/{key}/config"
+            if value is None:
+                if not delete_when_none:
+                    # Stable aggregate sensors may be temporarily empty around a
+                    # month boundary. Keep discovery until data is available.
+                    continue
+                self._publish(config_topic, "", retain=True)
+                continue
+
+            attributes = spec.pop("attributes", None)
+            payload = {
+                "name": spec.pop("name"),
+                "unique_id": f"sgcc_{entity_key}_{key}",
+                "object_id": f"sgcc_{entity_key}_{key}",
+                "default_entity_id": f"sensor.sgcc_{entity_key}_{key}",
+                "state_topic": state_topic,
+                "device": device,
+            }
+            if attributes is not None:
+                payload["json_attributes_topic"] = f"sgcc/{node}/{key}/attributes"
+            payload.update({k: v for k, v in spec.items() if v is not None})
+            self._publish(config_topic, json.dumps(payload, ensure_ascii=False), retain=True)
+            published_configs += 1
+            if attributes is not None:
+                self._publish(
+                    payload["json_attributes_topic"],
+                    json.dumps(attributes, ensure_ascii=False),
+                    retain=True,
+                )
+            self._publish(state_topic, self._format_value(value), retain=True)
+            published_states += 1
+        return published_configs, published_states
+
+    def _publish_legacy_aliases(
+        self,
+        account_data: AccountData,
+        *,
+        masked: str,
+        canonical_node: str,
+    ) -> None:
+        """Recreate the v0.1.5 Discovery identity over canonical v2 state topics."""
+        account_no = account_data.account.account_no
+        suffix = account_no[-4:]
+        legacy_node = self._safe_topic_part(f"sgcc_{masked}")
+        legacy_device = {
+            "identifiers": [f"sgcc_{masked}"],
+            "name": f"国网电费 {masked}",
+            "manufacturer": "SGCC bridge",
+        }
+        for source_spec in self._sensor_specs(account_data, masked, legacy_device):
+            spec = dict(source_spec)
+            value = spec.pop("value")
+            key = spec.pop("key")
+            delete_when_none = spec.pop("delete_when_none", True)
+            config_topic = f"{self.discovery_prefix}/sensor/{legacy_node}/{key}/config"
+            if value is None:
+                if delete_when_none:
+                    self._publish(config_topic, "", retain=True)
+                continue
+
+            attributes = spec.pop("attributes", None)
+            payload = {
+                "name": spec.pop("name"),
+                "unique_id": f"sgcc_{masked}_{key}",
+                "object_id": f"sgcc_{suffix}_{key}",
+                "state_topic": f"sgcc/{canonical_node}/{key}/state",
+                "device": legacy_device,
+            }
+            if attributes is not None:
+                payload["json_attributes_topic"] = (
+                    f"sgcc/{canonical_node}/{key}/attributes"
+                )
+            payload.update({k: v for k, v in spec.items() if v is not None})
+            self._publish(config_topic, json.dumps(payload, ensure_ascii=False), retain=True)
+
+    def remove_account_data(
+        self,
+        account_data: AccountData,
+        *,
+        remove_legacy: bool = False,
+    ) -> bool:
+        """Remove canonical Discovery and optionally a proven-safe legacy alias."""
         if self.client is None or not self.connected:
             logging.warning("MQTT 未连接，跳过账户 Discovery 清理。")
             return False
@@ -169,42 +245,50 @@ class MqttPublisher:
                 "name": f"国网电费 {masked}",
                 "manufacturer": "SGCC bridge",
             }
-            keys = sorted({
-                str(spec.get("key") or "")
-                for spec in self._sensor_specs(account_data, masked, device)
-                if spec.get("key")
-            })
+            keys = self._discovery_keys(account_data, masked, device)
             for key in keys:
                 config_topic = f"{self.discovery_prefix}/sensor/{node}/{key}/config"
                 self._publish(config_topic, "", retain=True)
-                legacy_node = self._safe_topic_part(f"sgcc_{masked}")
-                legacy_topic = f"{self.discovery_prefix}/sensor/{legacy_node}/{key}/config"
-                self._publish(legacy_topic, "", retain=True)
-            logging.info(f"MQTT 已清理失效户号 {masked} 的 {len(keys)} 个 Discovery 配置。")
+            if remove_legacy:
+                self.remove_legacy_discovery(account_data)
+            logging.info(f"MQTT 已清理失效户号 {masked} 的 {len(keys)} 个 canonical Discovery 配置。")
             return bool(keys)
         except Exception as e:
             logging.warning(f"MQTT 账户 Discovery 清理失败: {e}")
             return False
 
-    def _cleanup_legacy_discovery(self, account_data: AccountData, masked: str) -> None:
-        account_no = account_data.account.account_no
-        if account_no in self._legacy_cleanup_done:
-            return
+    def remove_legacy_discovery(self, account_data: AccountData) -> bool:
+        """Tombstone one account's v0.1.5 retained Discovery namespace."""
+        if self.client is None or not self.connected:
+            logging.warning("MQTT 未连接，跳过 legacy Discovery 清理。")
+            return False
+        account_no = account_data.account.account_no if account_data and account_data.account else ""
+        if not account_no:
+            return False
+        masked = mask_account_no(account_no)
         legacy_node = self._safe_topic_part(f"sgcc_{masked}")
         legacy_device = {
             "identifiers": [f"sgcc_{masked}"],
             "name": f"国网电费 {masked}",
             "manufacturer": "SGCC bridge",
         }
-        keys = {
-            str(spec.get("key") or "")
-            for spec in self._sensor_specs(account_data, masked, legacy_device)
-            if spec.get("key")
-        }
-        for key in sorted(keys):
+        keys = self._discovery_keys(account_data, masked, legacy_device)
+        for key in keys:
             topic = f"{self.discovery_prefix}/sensor/{legacy_node}/{key}/config"
             self._publish(topic, "", retain=True)
-        self._legacy_cleanup_done.add(account_no)
+        return bool(keys)
+
+    def _discovery_keys(
+        self,
+        account_data: AccountData,
+        masked: str,
+        device: dict[str, Any],
+    ) -> list[str]:
+        return sorted({
+            str(spec.get("key") or "")
+            for spec in self._sensor_specs(account_data, masked, device)
+            if spec.get("key")
+        })
 
     def _publish(self, topic: str, payload: Any, retain: bool = False) -> None:
         result = self.client.publish(topic, payload=payload, retain=retain)

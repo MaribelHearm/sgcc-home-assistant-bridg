@@ -27,7 +27,7 @@ type: custom:xiaoshi-state-grid-info
 python tools/convert_state_grid_lovelace.py input.yaml output.yaml --account-no 你的13位户号
 ```
 
-脚本会替换常见 `state_grid` 实体，并把图表里的 `attributes.graph` 按上下文替换为本项目历史实体的 `daily` / `monthly`。
+脚本会根据完整户号在本机计算 canonical `末四位_稳定摘要` 账户键，再替换常见 `state_grid` 实体，并把图表里的 `attributes.graph` 按上下文替换为本项目历史实体的 `daily` / `monthly`。完整户号不会写入输出。已从 Home Assistant 或日志确认账户键时，也可改用 `--entity-key <末四位_稳定摘要>`；不要填写只有末四位的旧身份。
 
 转换后仍建议检查一次 YAML，特别是自定义 `data_generator` 里对单条数据字段名的读取逻辑。
 

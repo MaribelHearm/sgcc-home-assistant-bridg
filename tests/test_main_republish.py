@@ -18,7 +18,9 @@ from sgcc_ha_bridge.store import Store
 
 class FakeMqttPublisher:
     published = []
+    published_actions = []
     removed = []
+    remove_legacy_flags = []
 
     def __init__(self, config):
         self.config = config
@@ -30,12 +32,14 @@ class FakeMqttPublisher:
     def __exit__(self, exc_type, exc, tb):
         return None
 
-    def publish_account_data(self, data):
+    def publish_account_data(self, data, *, legacy_action="none"):
         FakeMqttPublisher.published.append(data)
+        FakeMqttPublisher.published_actions.append(legacy_action)
         return True
 
-    def remove_account_data(self, data):
+    def remove_account_data(self, data, *, remove_legacy=False):
         FakeMqttPublisher.removed.append(data)
+        FakeMqttPublisher.remove_legacy_flags.append(remove_legacy)
         return True
 
 
@@ -48,7 +52,9 @@ class RepublishMqttFromStoreTestCase(unittest.TestCase):
         self.old_publisher = main.MqttPublisher
         main.MqttPublisher = FakeMqttPublisher
         FakeMqttPublisher.published.clear()
+        FakeMqttPublisher.published_actions.clear()
         FakeMqttPublisher.removed.clear()
+        FakeMqttPublisher.remove_legacy_flags.clear()
 
     def tearDown(self):
         main.MqttPublisher = self.old_publisher
@@ -78,6 +84,7 @@ class RepublishMqttFromStoreTestCase(unittest.TestCase):
 
         self.assertTrue(main.republish_mqtt_from_store(FetcherConfig(PUBLISHER="mqtt")))
         self.assertEqual(len(FakeMqttPublisher.published), 1)
+        self.assertEqual(FakeMqttPublisher.published_actions, ["publish"])
 
     def test_stale_daily_cache_still_republishes_useful_data(self):
         self._save(AccountData(
@@ -133,6 +140,58 @@ class RepublishMqttFromStoreTestCase(unittest.TestCase):
             sorted(item.account.account_no for item in FakeMqttPublisher.removed),
             ["1234567893445", "1234567897402"],
         )
+        self.assertEqual(FakeMqttPublisher.remove_legacy_flags, [True, True])
+    def test_same_suffix_accounts_remove_legacy_aliases_in_compat_mode(self):
+        accounts = ("1234567890123", "9876543210123")
+        for account_no in accounts:
+            self._save(AccountData(
+                account=Account(account_no=account_no),
+                daily=[DailyReading(
+                    account_no=account_no,
+                    date=main.datetime.now().strftime("%Y-%m-%d"),
+                    total_usage_kwh=1.2,
+                )],
+            ))
+
+        self.assertTrue(main.republish_mqtt_from_store(FetcherConfig(
+            PUBLISHER="mqtt",
+            MQTT_LEGACY_DISCOVERY_MODE="compat",
+        )))
+        self.assertEqual(FakeMqttPublisher.published_actions, ["remove", "remove"])
+
+    def test_off_mode_does_not_modify_legacy_discovery(self):
+        account_no = "1234567890123"
+        self._save(AccountData(
+            account=Account(account_no=account_no),
+            daily=[DailyReading(
+                account_no=account_no,
+                date=main.datetime.now().strftime("%Y-%m-%d"),
+                total_usage_kwh=1.2,
+            )],
+        ))
+
+        self.assertTrue(main.republish_mqtt_from_store(FetcherConfig(
+            PUBLISHER="mqtt",
+            MQTT_LEGACY_DISCOVERY_MODE="off",
+        )))
+        self.assertEqual(FakeMqttPublisher.published_actions, ["none"])
+
+    def test_cleanup_mode_removes_legacy_discovery(self):
+        account_no = "1234567890123"
+        self._save(AccountData(
+            account=Account(account_no=account_no),
+            daily=[DailyReading(
+                account_no=account_no,
+                date=main.datetime.now().strftime("%Y-%m-%d"),
+                total_usage_kwh=1.2,
+            )],
+        ))
+
+        self.assertTrue(main.republish_mqtt_from_store(FetcherConfig(
+            PUBLISHER="mqtt",
+            MQTT_LEGACY_DISCOVERY_MODE="cleanup",
+        )))
+        self.assertEqual(FakeMqttPublisher.published_actions, ["remove"])
 
 
 class CacheFileUpdator:
@@ -162,7 +221,9 @@ class RepublishMqttFromLegacyStateTestCase(unittest.TestCase):
         self.old_publisher = main.MqttPublisher
         main.MqttPublisher = FakeMqttPublisher
         FakeMqttPublisher.published.clear()
+        FakeMqttPublisher.published_actions.clear()
         FakeMqttPublisher.removed.clear()
+        FakeMqttPublisher.remove_legacy_flags.clear()
 
     def tearDown(self):
         main.MqttPublisher = self.old_publisher
@@ -185,6 +246,7 @@ class RepublishMqttFromLegacyStateTestCase(unittest.TestCase):
             [item.account.account_no for item in FakeMqttPublisher.published],
             ["1234567890123"],
         )
+        self.assertEqual(FakeMqttPublisher.published_actions, ["none"])
         self.assertTrue(
             any(sensor.endswith("_0123") for sensor in updator.requested_sensors)
         )

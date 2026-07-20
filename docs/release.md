@@ -4,8 +4,8 @@
 
 正式版本发布前保持这些位置一致：
 
-- `pyproject.toml`：Python 包版本，例如 `0.1.7`。
-- `config.yaml`：Home Assistant Add-on/App 版本，例如 `v0.1.7`。
+- `pyproject.toml`：Python 包版本，例如 `0.1.8`。
+- `config.yaml`：Home Assistant Add-on/App 版本，例如 `v0.1.8`。
 - `CHANGELOG.md` / `DOCS.md` / `ha_addons_doc/`：对外文档中的版本说明。
 
 普通功能或修复 PR 可以先进入 `main` 的 `Unreleased`，不必在同一个 PR 中创建版本 tag。`main` 会发布 `latest`、`main` 和 `sha-*` 镜像；正式 Add-on/App 版本仍通过单独的 `v*` tag 和 GitHub Release 发布。
@@ -35,7 +35,7 @@ ghcr.io/maribelhearm/sgcc-home-assistant-bridge-browser
 latest
 main
 sha-xxxxxxx
-v0.1.7
+v0.1.8
 ```
 
 Aliyun ACR 使用同一个公开仓库，browser-service 镜像使用 `browser-*` 前缀：
@@ -44,11 +44,11 @@ Aliyun ACR 使用同一个公开仓库，browser-service 镜像使用 `browser-*
 latest
 main
 sha-xxxxxxx
-v0.1.7
+v0.1.8
 browser-latest
 browser-main
 browser-sha-xxxxxxx
-browser-v0.1.7
+browser-v0.1.8
 ```
 
 ## 变更 PR 检查清单
@@ -75,7 +75,7 @@ git diff --check
 
 在需要发布新的 Add-on/App 版本时：
 
-1. 更新 `pyproject.toml`、`config.yaml`、`CHANGELOG.md`、`DOCS.md` 和 Add-on 文档中的版本。
+1. 更新 `pyproject.toml`、`config.yaml`、`CHANGELOG.md`、`DOCS.md`、`example.env` 和 Add-on 文档中的版本与新增配置；实体身份变更还要同步迁移说明、全部 Lovelace 示例及其契约测试。
 2. 通过 PR 合并版本提交，并等待 `main` CI 成功。
 3. 在已验证的 `main` commit 上创建并推送 `v*` tag。
 4. 等待 tag CI 构建并检查 GHCR / ACR 版本镜像 tag。

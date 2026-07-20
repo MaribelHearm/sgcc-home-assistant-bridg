@@ -84,7 +84,7 @@ class MqttPublisherTestCase(unittest.TestCase):
             account_entity_key(accounts[1]),
         )
 
-    def test_legacy_discovery_is_not_removed_before_new_publish_succeeds(self):
+    def test_legacy_action_is_not_applied_before_canonical_publish_succeeds(self):
         account_no = "1234567890123"
         publisher = MqttPublisher(FetcherConfig(
             MQTT_HOST="broker.local",
@@ -106,11 +106,79 @@ class MqttPublisherTestCase(unittest.TestCase):
                 "_publish",
                 side_effect=RuntimeError("new discovery publish failed"),
             ),
-            mock.patch.object(publisher, "_cleanup_legacy_discovery") as cleanup,
+            mock.patch.object(publisher, "_publish_legacy_aliases") as publish_legacy,
+            mock.patch.object(publisher, "remove_legacy_discovery") as remove_legacy,
         ):
-            self.assertFalse(publisher.publish_account_data(data))
+            self.assertFalse(publisher.publish_account_data(
+                data,
+                legacy_action="publish",
+            ))
 
-        cleanup.assert_not_called()
+        publish_legacy.assert_not_called()
+        remove_legacy.assert_not_called()
+
+    def test_publish_legacy_aliases_preserves_v015_identity_and_uses_canonical_state(self):
+        account_no = "1234567890123"
+        publisher = MqttPublisher(FetcherConfig(
+            MQTT_HOST="broker.local",
+            MQTT_DISCOVERY_PREFIX="homeassistant",
+        ))
+        self.assertTrue(publisher.connect())
+        data = AccountData(
+            account=Account(account_no=account_no),
+            balance=Balance(
+                account_no=account_no,
+                observed_at="2026-07-11T10:00:00+08:00",
+                balance_cny=10,
+            ),
+        )
+
+        self.assertTrue(publisher.publish_account_data(
+            data,
+            legacy_action="publish",
+        ))
+
+        messages = {
+            topic: payload
+            for topic, payload, _ in FakeClient.instances[-1].published
+        }
+        legacy_topic = "homeassistant/sensor/sgcc_xxxxxxxxx0123/balance/config"
+        self.assertIn(legacy_topic, messages)
+        payload = json.loads(messages[legacy_topic])
+        canonical_node = f"sgcc_{account_entity_key(account_no)}"
+        self.assertEqual(payload["unique_id"], "sgcc_*********0123_balance")
+        self.assertEqual(payload["object_id"], "sgcc_0123_balance")
+        self.assertNotIn("default_entity_id", payload)
+        self.assertEqual(payload["state_topic"], f"sgcc/{canonical_node}/balance/state")
+        self.assertNotIn(account_no, json.dumps(payload, ensure_ascii=False))
+
+    def test_legacy_remove_action_tombstones_after_canonical_publish(self):
+        account_no = "1234567890123"
+        publisher = MqttPublisher(FetcherConfig(
+            MQTT_HOST="broker.local",
+            MQTT_DISCOVERY_PREFIX="homeassistant",
+        ))
+        self.assertTrue(publisher.connect())
+        data = AccountData(
+            account=Account(account_no=account_no),
+            balance=Balance(
+                account_no=account_no,
+                observed_at="2026-07-11T10:00:00+08:00",
+                balance_cny=10,
+            ),
+        )
+
+        self.assertTrue(publisher.publish_account_data(
+            data,
+            legacy_action="remove",
+        ))
+        legacy_messages = [
+            (topic, payload, retain)
+            for topic, payload, retain in FakeClient.instances[-1].published
+            if "/sgcc_xxxxxxxxx0123/" in topic
+        ]
+        self.assertTrue(legacy_messages)
+        self.assertTrue(all(payload == "" and retain for _, payload, retain in legacy_messages))
 
     def test_publish_account_data_emits_discovery_and_state_without_full_account_no(self):
         current_month = "2026-06"
@@ -215,6 +283,10 @@ class MqttPublisherTestCase(unittest.TestCase):
         self.assertEqual(
             balance_payload["unique_id"],
             f"sgcc_{account_entity_key(account_no)}_balance",
+        )
+        self.assertEqual(
+            balance_payload["default_entity_id"],
+            f"sensor.sgcc_{account_entity_key(account_no)}_balance",
         )
         self.assertEqual(balance_payload["state_topic"], f"sgcc/{node}/balance/state")
         self.assertEqual(balance_payload["unit_of_measurement"], "CNY")
@@ -343,8 +415,9 @@ class MqttPublisherTestCase(unittest.TestCase):
         state_messages = {topic: payload for topic, payload, _ in FakeClient.instances[-1].published if topic.endswith("/state")}
         node = f"sgcc_{account_entity_key(account_no)}"
 
-        self.assertEqual(config_messages["homeassistant/sensor/sgcc_xxxxxxxxx0123/balance/config"], "")
-        self.assertNotIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/balance/config", active_config_topics)
+        self.assertEqual(config_messages[f"homeassistant/sensor/{node}/balance/config"], "")
+        self.assertNotIn(f"homeassistant/sensor/{node}/balance/config", active_config_topics)
+        self.assertNotIn("homeassistant/sensor/sgcc_xxxxxxxxx0123/balance/config", config_messages)
         self.assertNotIn(f"homeassistant/sensor/{node}/month_valley/config", config_messages)
         self.assertNotIn(f"homeassistant/sensor/{node}/month_flat/config", config_messages)
         self.assertNotIn(f"homeassistant/sensor/{node}/month_peak/config", config_messages)
@@ -462,7 +535,10 @@ class MqttPublisherTestCase(unittest.TestCase):
             )],
         )
 
-        self.assertTrue(publisher.remove_account_data(data))
+        self.assertTrue(publisher.remove_account_data(
+            data,
+            remove_legacy=True,
+        ))
 
         messages = FakeClient.instances[-1].published
         self.assertTrue(messages)

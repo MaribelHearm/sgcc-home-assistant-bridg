@@ -19,6 +19,11 @@ from .cache_validity import (
     has_useful_legacy_cache_entry,
 )
 from .data_fetcher import DataFetcher
+from .entity_identity import (
+    legacy_alias_policy,
+    mqtt_legacy_action,
+    mqtt_remove_legacy_on_cleanup,
+)
 from .model import Account, AccountData, Balance, DailyReading, MonthlyReading, YearlyReading, mask_account_no
 from .mqtt_publisher import MqttPublisher
 from .redact import redact_text
@@ -477,6 +482,11 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                 set(inactive_account_nos)
                 | {account_no for account_no in active_account_nos if account_no in ignored_accounts}
             )
+            legacy_policy = legacy_alias_policy(
+                active_account_nos,
+                published_account_nos=publish_account_nos,
+                authoritative=True,
+            )
             if not publish_account_nos and not cleanup_account_nos:
                 logging.info("SQLite Store 中没有账户缓存，跳过 MQTT 重发布。")
                 return False
@@ -491,7 +501,14 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                     data = store.get_account_data(account_no)
                     if data is None:
                         continue
-                    if publisher.remove_account_data(data):
+                    if publisher.remove_account_data(
+                        data,
+                        remove_legacy=mqtt_remove_legacy_on_cleanup(
+                            config.MQTT_LEGACY_DISCOVERY_MODE,
+                            account_no,
+                            legacy_policy,
+                        ),
+                    ):
                         cleanup_count += 1
                     else:
                         ok = False
@@ -514,7 +531,14 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                             f"SQLite Store 缓存户号 {masked_account} 日用电/余额数据不够新，仍先发布已有缓存并等待真实抓取刷新。"
                         )
                         all_recent = False
-                    if publisher.publish_account_data(data):
+                    if publisher.publish_account_data(
+                        data,
+                        legacy_action=mqtt_legacy_action(
+                            config.MQTT_LEGACY_DISCOVERY_MODE,
+                            account_no,
+                            legacy_policy,
+                        ),
+                    ):
                         published_count += 1
                     else:
                         ok = False
@@ -551,7 +575,10 @@ def republish_mqtt_from_legacy_ha_state(updator: SensorUpdator | None, config: F
                 account_data = _account_data_from_ha_states(updator, account_no)
                 if account_data is None:
                     continue
-                if publisher.publish_account_data(account_data):
+                if publisher.publish_account_data(
+                    account_data,
+                    legacy_action="none",
+                ):
                     published_count += 1
             if published_count:
                 logging.info(f"MQTT 已从旧 HA REST 状态兜底重发布 {published_count} 个户号。")

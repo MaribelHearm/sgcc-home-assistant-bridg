@@ -86,6 +86,18 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 
 完整部署说明见 [DOCS.md](DOCS.md)。
 
+## v0.1.5 及更早版本升级：实体 ID 兼容
+
+v0.1.6 引入了防碰撞、隐私化的 canonical 账户身份 `末四位_稳定摘要`。如果旧 Lovelace、自动化或脚本仍引用 v0.1.5 及更早的 MQTT 实体，升级到 v0.1.8 后请先保持默认配置：
+
+```env
+MQTT_LEGACY_DISCOVERY_MODE="compat"
+```
+
+`compat` 会先发布 canonical v2 实体，再为**末四位唯一**的户号恢复原 v0.1.5 MQTT Discovery 身份；不需要 Home Assistant API，也不要求改用 `PUBLISHER=both`。旧别名复用 canonical 状态主题，不是第二份数据源。若同一账号下有多个户号末四位相同，旧身份无法证明归属，程序会安全撤销该别名，只保留各自独立的 canonical 实体。
+
+不要在仪表盘、自动化、脚本等消费者全部迁移前启用 `cleanup`。`PUBLISHER=rest|mqtt|both` 均继续支持；HA UI/API 重命名 canonical 实体是可选的高级迁移路径，不是升级前提。完整的验证、迁移与回滚步骤见 [实体身份迁移说明](docs/entity-identity-migration.md)。
+
 ## 实体和数据
 
 推荐使用 `PUBLISHER=mqtt`。项目会通过 MQTT Discovery 创建一组设备实体。
@@ -137,6 +149,7 @@ assets/lovelace-cards/
 
 - [examples/README.md](examples/README.md)：示例目录索引。
 - [examples/lovelace-cards/](examples/lovelace-cards/)：三套内置卡片示例。
+- [docs/entity-identity-migration.md](docs/entity-identity-migration.md)：v0.1.5 旧实体兼容、canonical 迁移、验证和回滚。
 - [docs/state-grid-lovelace-migration.md](docs/state-grid-lovelace-migration.md)：`state_grid` 仪表盘字段替换说明。
 
 已有 `state_grid` 仪表盘 YAML 时，不建议让后端兼容另一套实体模型；可以用 `tools/convert_state_grid_lovelace.py` 做离线字段替换。

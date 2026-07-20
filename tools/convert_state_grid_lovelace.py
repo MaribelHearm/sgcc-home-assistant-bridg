@@ -123,7 +123,7 @@ def main() -> int:
     identity = parser.add_mutually_exclusive_group(required=True)
     identity.add_argument(
         "--entity-key",
-        help="Home Assistant 实体中的账户键，例如 4840_0123456789",
+        help="Home Assistant canonical 账户键，例如 0123_e2161a7e19",
     )
     identity.add_argument(
         "--account-no",

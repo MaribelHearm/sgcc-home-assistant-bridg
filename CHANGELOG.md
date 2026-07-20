@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修复 v0.1.5 及更早用户升级后旧 MQTT 实体被删除、Lovelace/自动化引用失效的问题：默认 `MQTT_LEGACY_DISCOVERY_MODE=compat` 会在 canonical v2 成功发布后，为末四位唯一的账户恢复原 v0.1.5 Discovery 身份。
+- 同一账号存在多个末四位相同的户号时，自动撤销无法证明归属的旧别名，只保留各自防碰撞的 canonical v2 实体；非权威账户枚举不创建也不删除旧别名。
+- REST 旧实体清理仅在全部 delete 成功或目标不存在后标记完成，部分失败会在后续发布重试。
+
+### Added
+
+- canonical MQTT Discovery 显式发布 `default_entity_id=sensor.sgcc_<末四位_稳定摘要>_<key>`，冻结新安装的实体命名契约。
+- 新增 `MQTT_LEGACY_DISCOVERY_MODE=compat|off|cleanup`；`off` 不触碰旧 retained Discovery，`cleanup` 仅供所有旧消费者迁移完成后显式清理。
+- 新增独立实体迁移文档、canonical Lovelace 示例契约和 v0.1.5 → v0.1.8 回归测试。
+
+### Compatibility
+
+- `PUBLISHER=rest|mqtt|both` 全部保留；默认升级无需 Home Assistant API，也不要求改用 `both`。
+- v0.1.6 引入 `末四位_稳定摘要` 身份时会删除旧 MQTT Discovery，属于需要消费者迁移的实体身份变更；v0.1.8 为该升级路径提供默认兼容和自愈。
+
 ## [v0.1.7] - 2026-07-21
 
 ### Fixed

@@ -4,7 +4,7 @@
 # 1. Home Assistant → 仪表盘 → 编辑仪表盘 → 添加视图/原始配置。
 # 2. 粘贴本文件内容作为一个 view；如果是在完整 dashboard raw config 中使用，
 #    把本文件整体放到 `views:` 列表的一项里。
-# 3. 示例账户键为 `4840_0123456789`；在 Home Assistant 中确认本次生成的完整实体 ID，并整体替换该账户键。
+# 3. 示例账户键为 `0123_e2161a7e19`；在 Home Assistant 中确认本次生成的完整实体 ID，并整体替换该账户键。
 # 4. 日/月历史实体按 HA 实际出现的数据范围增删；数据范围以国网页面自然返回为准。
 #
 # 实体分组：
@@ -29,37 +29,37 @@ sections:
         square: false
         cards:
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_balance
+            entity: sensor.sgcc_0123_e2161a7e19_balance
             name: 电费余额
             icon: mdi:cash
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_arrears
+            entity: sensor.sgcc_0123_e2161a7e19_arrears
             name: 应交金额
             icon: mdi:cash-clock
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_last_daily_usage
+            entity: sensor.sgcc_0123_e2161a7e19_last_daily_usage
             name: 最近日用电
             icon: mdi:lightning-bolt
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_month_usage
+            entity: sensor.sgcc_0123_e2161a7e19_month_usage
             name: 最新月度用电
             icon: mdi:calendar-month
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_month_charge
+            entity: sensor.sgcc_0123_e2161a7e19_month_charge
             name: 最新月度电费
             icon: mdi:cash-multiple
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_year_usage
+            entity: sensor.sgcc_0123_e2161a7e19_year_usage
             name: 年度用电
             icon: mdi:chart-timeline-variant
             tap_action:
@@ -69,13 +69,13 @@ sections:
         title: 数据摘要
         show_header_toggle: false
         entities:
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 历史数据摘要
-          - entity: sensor.sgcc_4840_0123456789_last_daily_usage
+          - entity: sensor.sgcc_0123_e2161a7e19_last_daily_usage
             name: 最新日读数
-          - entity: sensor.sgcc_4840_0123456789_month_usage
+          - entity: sensor.sgcc_0123_e2161a7e19_month_usage
             name: 最新月读数
-          - entity: sensor.sgcc_4840_0123456789_year_usage
+          - entity: sensor.sgcc_0123_e2161a7e19_year_usage
             name: 年读数
 
   - title: 近日日用电
@@ -84,19 +84,19 @@ sections:
         title: 国网页面返回的日用电
         show_header_toggle: false
         entities:
-          - entity: sensor.sgcc_4840_0123456789_daily_20260617
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260617
             name: 2026-06-17
-          - entity: sensor.sgcc_4840_0123456789_daily_20260616
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260616
             name: 2026-06-16
-          - entity: sensor.sgcc_4840_0123456789_daily_20260615
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260615
             name: 2026-06-15
-          - entity: sensor.sgcc_4840_0123456789_daily_20260614
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260614
             name: 2026-06-14
-          - entity: sensor.sgcc_4840_0123456789_daily_20260613
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260613
             name: 2026-06-13
-          - entity: sensor.sgcc_4840_0123456789_daily_20260612
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260612
             name: 2026-06-12
-          - entity: sensor.sgcc_4840_0123456789_daily_20260611
+          - entity: sensor.sgcc_0123_e2161a7e19_daily_20260611
             name: 2026-06-11
 
   - title: 月度历史
@@ -105,24 +105,24 @@ sections:
         title: 月度用电
         show_header_toggle: false
         entities:
-          - entity: sensor.sgcc_4840_0123456789_monthly_202605
+          - entity: sensor.sgcc_0123_e2161a7e19_monthly_202605
             name: 2026-05 用电
-          - entity: sensor.sgcc_4840_0123456789_monthly_202604
+          - entity: sensor.sgcc_0123_e2161a7e19_monthly_202604
             name: 2026-04 用电
-          - entity: sensor.sgcc_4840_0123456789_monthly_202603
+          - entity: sensor.sgcc_0123_e2161a7e19_monthly_202603
             name: 2026-03 用电
-          - entity: sensor.sgcc_4840_0123456789_monthly_202602
+          - entity: sensor.sgcc_0123_e2161a7e19_monthly_202602
             name: 2026-02 用电
-          - entity: sensor.sgcc_4840_0123456789_monthly_202601
+          - entity: sensor.sgcc_0123_e2161a7e19_monthly_202601
             name: 2026-01 用电
 
       - type: entities
         title: 年度历史
         show_header_toggle: false
         entities:
-          - entity: sensor.sgcc_4840_0123456789_year_2026
+          - entity: sensor.sgcc_0123_e2161a7e19_year_2026
             name: 2026 年用电
-          - entity: sensor.sgcc_4840_0123456789_year_charge
+          - entity: sensor.sgcc_0123_e2161a7e19_year_charge
             name: 年度电费
 
   - title: 峰平谷尖
@@ -132,25 +132,25 @@ sections:
         square: false
         cards:
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_month_valley
+            entity: sensor.sgcc_0123_e2161a7e19_month_valley
             name: 谷时电量
             icon: mdi:weather-night
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_month_flat
+            entity: sensor.sgcc_0123_e2161a7e19_month_flat
             name: 平时电量
             icon: mdi:minus-circle-outline
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_month_peak
+            entity: sensor.sgcc_0123_e2161a7e19_month_peak
             name: 峰时电量
             icon: mdi:chart-bell-curve
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.sgcc_4840_0123456789_month_tip
+            entity: sensor.sgcc_0123_e2161a7e19_month_tip
             name: 尖时电量
             icon: mdi:flash-triangle
             tap_action:
@@ -172,7 +172,7 @@ sections:
           yaxis:
             decimalsInFloat: 2
         series:
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 日用电
             type: line
             unit: kWh
@@ -195,28 +195,28 @@ sections:
           yaxis:
             decimalsInFloat: 2
         series:
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 谷
             type: line
             unit: kWh
             data_generator: |
               const rows = entity.attributes.daily || [];
               return rows.filter((row) => row.date).map((row) => [new Date(row.date).getTime(), Number(row.valley_kwh || 0)]);
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 平
             type: line
             unit: kWh
             data_generator: |
               const rows = entity.attributes.daily || [];
               return rows.filter((row) => row.date).map((row) => [new Date(row.date).getTime(), Number(row.flat_kwh || 0)]);
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 峰
             type: line
             unit: kWh
             data_generator: |
               const rows = entity.attributes.daily || [];
               return rows.filter((row) => row.date).map((row) => [new Date(row.date).getTime(), Number(row.peak_kwh || 0)]);
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 尖
             type: line
             unit: kWh
@@ -237,7 +237,7 @@ sections:
           yaxis:
             decimalsInFloat: 2
         series:
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 月用电
             type: column
             unit: kWh
@@ -253,11 +253,11 @@ sections:
         title: 数据摘要
         show_header_toggle: false
         entities:
-          - entity: sensor.sgcc_4840_0123456789_history
+          - entity: sensor.sgcc_0123_e2161a7e19_history
             name: 历史数据摘要
-          - entity: sensor.sgcc_4840_0123456789_last_daily_usage
+          - entity: sensor.sgcc_0123_e2161a7e19_last_daily_usage
             name: 最新日读数
-          - entity: sensor.sgcc_4840_0123456789_month_usage
+          - entity: sensor.sgcc_0123_e2161a7e19_month_usage
             name: 最新月读数
-          - entity: sensor.sgcc_4840_0123456789_year_usage
+          - entity: sensor.sgcc_0123_e2161a7e19_year_usage
             name: 年读数
