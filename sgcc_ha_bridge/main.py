@@ -9,6 +9,7 @@ import random
 from .error_watcher import ErrorWatcher
 from .sensor_updator import SensorUpdator
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Callable
 from .const import *
 from .config import FetcherConfig
@@ -62,6 +63,8 @@ def _daily_schedule_times(job_start_time: str, jitter_minutes: int, daily_runs: 
 class DailyJitterScheduler:
     """Schedule one logical day's runs, then draw a new offset for the next day."""
 
+    STATE_VERSION = 1
+
     def __init__(
         self,
         scheduler,
@@ -72,6 +75,7 @@ class DailyJitterScheduler:
         *job_args,
         randint=random.randint,
         now: Callable[[], datetime] = datetime.now,
+        state_file: str | Path | None = None,
     ):
         self.scheduler = scheduler
         self.job_start_time = job_start_time
@@ -81,21 +85,16 @@ class DailyJitterScheduler:
         self.job_args = job_args
         self.randint = randint
         self.now = now
+        default_state_file = Path(get_data_dir()) / "daily_schedule.json"
+        self.state_file = Path(state_file or default_state_file)
         self._scheduled_for: date | None = None
         self._jobs = []
 
     def schedule_day(self, target_date: date | None = None) -> list[datetime]:
-        target_date = target_date or self.now().date()
         current_time = self.now()
+        target_date, offset_minutes = self._schedule_seed(target_date, current_time)
         while True:
-            offset_minutes, run_times = _daily_schedule_times(
-                self.job_start_time,
-                self.jitter_minutes,
-                self.daily_runs,
-                randint=self.randint,
-            )
-            first_time = datetime.strptime(self.job_start_time, "%H:%M").time()
-            first_run = datetime.combine(target_date, first_time) + timedelta(minutes=offset_minutes)
+            first_run = self._first_run(target_date, offset_minutes)
             run_datetimes = [first_run]
             if self.daily_runs >= 2:
                 run_datetimes.append(first_run + timedelta(hours=12))
@@ -107,6 +106,7 @@ class DailyJitterScheduler:
             if future_runs:
                 break
             target_date += timedelta(days=1)
+            offset_minutes = self._sample_offset()
 
         self.clear()
         for position, (run_index, run_at) in enumerate(future_runs):
@@ -122,12 +122,102 @@ class DailyJitterScheduler:
             self._jobs.append(job)
 
         self._scheduled_for = target_date
+        self._save_state(target_date, offset_minutes)
         scheduled_times = [run_at.strftime("%H:%M") for _, run_at in future_runs]
         logging.info(
             f"已为 {target_date.isoformat()} 抽取每日抓取偏移 {offset_minutes:+d} 分钟，"
             f"本次进程后续实际时间={' 和 '.join(scheduled_times)}。"
         )
         return [run_at for _, run_at in future_runs]
+
+    def _schedule_seed(
+        self, target_date: date | None, current_time: datetime
+    ) -> tuple[date, int]:
+        if target_date is not None:
+            return target_date, self._sample_offset()
+
+        state = self._load_state()
+        if state is not None:
+            logical_date, offset_minutes = state
+            if logical_date >= current_time.date() - timedelta(days=1):
+                last_run = self._last_run(logical_date, offset_minutes)
+                if last_run > current_time:
+                    logging.info(
+                        f"恢复 {logical_date.isoformat()} 未执行完的每日抓取偏移 "
+                        f"{offset_minutes:+d} 分钟。"
+                    )
+                    return logical_date, offset_minutes
+                next_date = max(current_time.date(), logical_date + timedelta(days=1))
+                return next_date, self._sample_offset()
+
+        previous_date = current_time.date() - timedelta(days=1)
+        if self._last_run(previous_date, self.jitter_minutes) > current_time:
+            previous_offset = self._sample_offset()
+            if self._last_run(previous_date, previous_offset) > current_time:
+                logging.info(
+                    f"首次启动恢复 {previous_date.isoformat()} 仍待执行的跨日抓取，"
+                    f"偏移 {previous_offset:+d} 分钟。"
+                )
+                return previous_date, previous_offset
+        return current_time.date(), self._sample_offset()
+
+    def _sample_offset(self) -> int:
+        if not self.jitter_minutes:
+            return 0
+        return self.randint(-self.jitter_minutes, self.jitter_minutes)
+
+    def _first_run(self, target_date: date, offset_minutes: int) -> datetime:
+        first_time = datetime.strptime(self.job_start_time, "%H:%M").time()
+        return datetime.combine(target_date, first_time) + timedelta(minutes=offset_minutes)
+
+    def _last_run(self, target_date: date, offset_minutes: int) -> datetime:
+        first_run = self._first_run(target_date, offset_minutes)
+        if self.daily_runs >= 2:
+            return first_run + timedelta(hours=12)
+        return first_run
+
+    def _state_matches_config(self, data: dict) -> bool:
+        return (
+            data.get("version") == self.STATE_VERSION
+            and data.get("job_start_time") == self.job_start_time
+            and data.get("jitter_minutes") == self.jitter_minutes
+            and data.get("daily_runs") == self.daily_runs
+        )
+
+    def _load_state(self) -> tuple[date, int] | None:
+        try:
+            if not self.state_file.exists():
+                return None
+            data = json.loads(self.state_file.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or not self._state_matches_config(data):
+                return None
+            logical_date = date.fromisoformat(data["logical_date"])
+            offset_minutes = int(data["offset_minutes"])
+            if not -self.jitter_minutes <= offset_minutes <= self.jitter_minutes:
+                return None
+            return logical_date, offset_minutes
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+            logging.warning(f"读取每日抓取调度状态失败，重新抽取偏移: {redact_text(error)}")
+            return None
+
+    def _save_state(self, target_date: date, offset_minutes: int) -> None:
+        data = {
+            "version": self.STATE_VERSION,
+            "logical_date": target_date.isoformat(),
+            "offset_minutes": offset_minutes,
+            "job_start_time": self.job_start_time,
+            "jitter_minutes": self.jitter_minutes,
+            "daily_runs": self.daily_runs,
+        }
+        try:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.state_file.with_name(f".{self.state_file.name}.tmp")
+            temporary.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            temporary.replace(self.state_file)
+        except OSError as error:
+            logging.warning(f"写入每日抓取调度状态失败，重启后可能无法恢复跨日任务: {redact_text(error)}")
 
     def _run_once(self, target_date: date, run_index: int, run_at: datetime, is_last: bool):
         if self.now() - run_at > timedelta(hours=6):

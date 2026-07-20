@@ -29,6 +29,7 @@ NON_RETRYABLE_LOGIN_CATEGORIES = {
     "risk_blocked",
     "captcha_passed_login_failed",
     "captcha_failed",
+    "phone_code_timeout",
 }
 
 
