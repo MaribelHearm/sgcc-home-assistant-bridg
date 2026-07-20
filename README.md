@@ -20,6 +20,8 @@
 - 支持 MQTT Discovery、HA REST states API 或两者同时发布。
 - 支持 Docker Compose、GHCR 镜像和 Home Assistant OS / Supervised Add-on。
 - 默认提供官方 Google Chrome `browser-service` 模式，减少无人值守登录风控概率。
+- 每天重新抽取可配置的抓取时间偏移，避免长期固定时刻登录。
+- 支持短信验证码、二维码人工兜底，以及 Telegram Bot 通知与验证码回复。
 - 验证码识别使用 OpenAI 兼容多模态接口，也兼容火山方舟 / 豆包 `ARK_*` 配置。
 
 ## 快速开始

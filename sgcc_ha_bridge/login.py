@@ -11,11 +11,12 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import TimeoutException
 
 from .captcha_selenium import solve_captcha_in_browser
-from .login_guard import LoginFailure, classify_login_failure
+from .login_guard import LoginFailure, classify_login_failure, env_bool
 from .config import FetcherConfig
 from .const import LOGIN_URL, get_data_dir
 from .error_watcher import ErrorWatcher
-from .redact import mask_secret
+from .login_interaction import build_login_interaction, read_sms_code
+from .redact import mask_secret, redact_text
 
 
 class SgccLogin:
@@ -27,26 +28,8 @@ class SgccLogin:
 
     @staticmethod
     def is_logged_in_page(driver) -> bool:
-        try:
-            try:
-                if driver.execute_script("return !!sessionStorage.getItem('accessToken')"):
-                    return True
-            except Exception:
-                pass
-
-            current_url = driver.current_url or ""
-            if "/osgweb/login" not in current_url and "/osgweb/" in current_url:
-                return True
-            return bool(driver.execute_script("""
-                return !!(
-                    document.querySelector('.el-dropdown') ||
-                    document.querySelector('.userName') ||
-                    document.body.innerText.includes('我的') ||
-                    document.body.innerText.includes('安全退出')
-                );
-            """))
-        except Exception:
-            return False
+        authenticated, _ = SgccLogin.auth_evidence(driver)
+        return authenticated
 
     @staticmethod
     def auth_evidence(driver) -> tuple[bool, str]:
@@ -57,24 +40,20 @@ class SgccLogin:
             except Exception:
                 pass
 
-            current_url = driver.current_url or ""
-            if "/osgweb/login" not in current_url and "/osgweb/" in current_url:
-                return True, "url_dom"
             if driver.execute_script("""
                 return !!(
                     document.querySelector('.el-dropdown') ||
                     document.querySelector('.userName') ||
-                    document.body.innerText.includes('我的') ||
                     document.body.innerText.includes('安全退出')
                 );
             """):
-                return True, "url_dom"
+                return True, "dom"
             return False, "none"
         except Exception:
             return False, "error"
 
     @ErrorWatcher.watch
-    def login(self, phone_code=False, allow_fallback: bool = True) -> bool:
+    def login(self, phone_code=False, allow_fallback: bool = True, fallback_methods: Optional[list[str]] = None) -> bool:
         driver = self.driver
         try:
             self._safe_get(driver, LOGIN_URL, "登录页面")
@@ -115,20 +94,7 @@ class SgccLogin:
         logging.info("已点击同意选项。\r")
         time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
         if phone_code:
-            self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[1]/div[1]/div[3]/span')
-            input_elements = driver.find_elements(By.CLASS_NAME, "el-input__inner")
-            input_elements[2].send_keys(self._username)
-            logging.info(f"已输入用户名: {mask_secret(self._username)}\r")
-            self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[1]/div[2]/div[2]/div/a')
-            code = input("请输入手机验证码: ")
-            input_elements[3].send_keys(code)
-            logging.info("已输入手机验证码。\r")
-            # 点击登录按钮
-            self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[2]/div/button/span')
-            time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT*2)
-            logging.info("已点击登录按钮。\r")
-
-            return True
+            return self._phone_code_login(driver, "已显式配置短信验证码登录")
         # 增加判空校验便于测试备用方案
         elif self._password is not None and len(self._password) > 0:
             # 输入用户名和密码
@@ -167,7 +133,11 @@ class SgccLogin:
                             logging.error(error)
                         category = classify_login_failure(error, captcha_passed=True)
                         ErrorWatcher.instance().capture(f"login_failed_{category}", error)
-                        if allow_fallback and self._fallback_login(driver, error):
+                        if (
+                            allow_fallback
+                            and self._fallback_allowed_for(category)
+                            and self._fallback_login(driver, error, fallback_methods)
+                        ):
                             return True
                         raise LoginFailure(category, error)
                 else:
@@ -175,14 +145,22 @@ class SgccLogin:
                     logging.error("点击验证码识别在所有重试后均失败。")
                     category = classify_login_failure(error, captcha_failed=True)
                     ErrorWatcher.instance().capture(f"login_failed_{category}", error)
-                    if allow_fallback and self._fallback_login(driver, error):
+                    if (
+                        allow_fallback
+                        and self._fallback_allowed_for(category)
+                        and self._fallback_login(driver, error, fallback_methods)
+                    ):
                         return True
                     raise LoginFailure(category, error)
             else:
                 logging.error(f"登录失败: [{error}]\r")
                 category = classify_login_failure(error)
                 ErrorWatcher.instance().capture(f"login_failed_{category}", error)
-                if allow_fallback and self._fallback_login(driver, error):
+                if (
+                    allow_fallback
+                    and self._fallback_allowed_for(category)
+                    and self._fallback_login(driver, error, fallback_methods)
+                ):
                     return True
                 raise LoginFailure(category, error)
         raise LoginFailure("login_failed", "登录失败")
@@ -249,12 +227,80 @@ class SgccLogin:
         finally:
             driver.implicitly_wait(self.config.DRIVER_IMPLICITY_WAIT_TIME)  # 恢复隐式等待
 
-    def _fallback_login(self, driver, reason: str) -> bool:
-        """使用备用方案登录"""
-        fallback = os.getenv("LOGIN_FALLBACK")
-        if fallback == 'qrcode':
-            return self._qr_login(driver, reason)
+    def _fallback_login(self, driver, reason: str, methods: Optional[list[str]] = None) -> bool:
+        """Try explicitly configured interactive login methods in order."""
+        if methods is None:
+            methods = self._fallback_methods()
+        for method in methods:
+            try:
+                if method == "phone-code":
+                    if self._phone_code_login(driver, reason):
+                        return True
+                elif method == "qrcode":
+                    if self._qr_login(driver, reason):
+                        return True
+            except LoginFailure as fallback_error:
+                logging.warning(
+                    f"登录兜底方式 {method} 执行失败: {redact_text(fallback_error)}"
+                )
+                if not self._fallback_allowed_for(fallback_error.category):
+                    raise
+            except Exception as fallback_error:
+                logging.warning(
+                    f"登录兜底方式 {method} 执行失败，继续尝试下一方式: "
+                    f"{redact_text(fallback_error)}"
+                )
         return False
+
+    @staticmethod
+    def _fallback_allowed_for(category: str) -> bool:
+        return category != "risk_blocked" or env_bool("SGCC_RISK_FALLBACK_OVERRIDE", False)
+
+    @staticmethod
+    def _fallback_methods() -> list[str]:
+        raw = os.getenv("SGCC_LOGIN_FALLBACK_METHODS") or os.getenv("LOGIN_FALLBACK", "")
+        methods = []
+        for value in raw.replace("+", ",").split(","):
+            method = value.strip().lower().replace("_", "-")
+            if method in {"sms", "phone", "phonecode"}:
+                method = "phone-code"
+            if method in {"phone-code", "qrcode"} and method not in methods:
+                methods.append(method)
+        return methods
+
+    def _phone_code_login(self, driver, reason: str) -> bool:
+        logging.info("短信验证码登录开始。")
+        self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[1]/div[1]/div[3]/span')
+        time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
+        input_elements = driver.find_elements(By.CLASS_NAME, "el-input__inner")
+        if len(input_elements) < 4:
+            raise LoginFailure("phone_code_page_failed", "短信验证码登录页面输入框不完整")
+        input_elements[2].clear()
+        input_elements[2].send_keys(self._username)
+        logging.info(f"已输入用户名: {mask_secret(self._username)}\r")
+        self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[1]/div[2]/div[2]/div/a')
+
+        interaction = build_login_interaction()
+        code = read_sms_code(interaction, reason)
+        if not code:
+            interaction.notify_result("phone-code", False, "未在有效时间内收到短信验证码")
+            raise LoginFailure("phone_code_timeout", "未在有效时间内收到短信验证码")
+        input_elements[3].send_keys(code)
+        code = None
+        logging.info("已输入手机验证码。\r")
+        self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[2]/div/button/span')
+        time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT * 2)
+        success = self.is_logged_in_page(driver)
+        interaction.notify_result(
+            "phone-code",
+            success,
+            "登录态已确认" if success else "验证码提交后仍未检测到登录态",
+        )
+        if success:
+            logging.info("短信验证码登录成功。")
+            return True
+        error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span") or "短信验证码提交后仍未登录"
+        raise LoginFailure(classify_login_failure(error), error)
 
     def _qr_login(self, driver, reason: str) -> bool:
         logging.info("二维码登录开始")
@@ -288,24 +334,37 @@ class SgccLogin:
             pass
         logging.info(f"已临时保存登录二维码到 {qr_path}")
 
+        interaction = build_login_interaction()
         try:
-            from .notify import UrlLoginQrCodeNotify
             try:
-                UrlLoginQrCodeNotify()(img_screenshot, reason)
+                interaction.send_qr_code(img_screenshot, reason)
             except Exception as notify_error:
                 logging.warning(f"二维码通知失败，继续等待本地扫码: {notify_error}")
             for i in range(1, self.config.QR_CODE_LOGIN_WAIT_COUNT + 1):
                 logging.info(f'二维码登录等待检查[{self.config.QR_CODE_LOGIN_WAIT_TIME_INTERVAL_UNIT}] 次数[{i}]')
                 time.sleep(self.config.QR_CODE_LOGIN_WAIT_TIME_INTERVAL_UNIT)
-                if (driver.current_url != LOGIN_URL):
-                    logging.info("二维码登录成功")
-                    return True
+                if driver.current_url != LOGIN_URL:
+                    try:
+                        WebDriverWait(
+                            driver,
+                            self.config.DRIVER_IMPLICITY_WAIT_TIME,
+                        ).until(self.is_logged_in_page)
+                    except TimeoutException:
+                        logging.warning("二维码扫码后页面已跳转，但未确认有效登录态。")
+                    if self.is_logged_in_page(driver):
+                        logging.info("二维码登录成功")
+                        interaction.notify_result("qrcode", True, "登录态已确认")
+                        return True
+                    interaction.notify_result("qrcode", False, "扫码后仍未确认登录态")
+                    return False
                 error = self._get_error_message(driver, "//div[@class='sweepCodePic']//div[@class='erwBg']//p")
                 if error is not None:
                     logging.error(f'二维码登录错误[{error}]')
+                    interaction.notify_result("qrcode", False, error)
                     return False
 
             logging.warning("二维码登录超时")
+            interaction.notify_result("qrcode", False, "等待扫码超时")
             return False
         finally:
             try:

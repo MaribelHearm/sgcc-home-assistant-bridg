@@ -54,6 +54,14 @@ class DataFetcher:
     def _redact_text(value) -> str:
         return redact_text(value)
 
+    @staticmethod
+    def _allow_login_fallback(trigger_type: str) -> bool:
+        return (
+            trigger_type == "manual"
+            or env_bool("SGCC_LOGIN_FALLBACK_UNATTENDED", False)
+            or env_bool("SGCC_QRCODE_FALLBACK_UNATTENDED", False)
+        )
+
     def _random_delay(self, min_seconds=0.5, max_seconds=3.0):
         """添加随机延迟，使自动化操作更难被检测。"""
         delay = random.uniform(min_seconds, max_seconds)
@@ -138,10 +146,10 @@ class DataFetcher:
             try:
                 login_client = SgccLogin(driver, self._username, self._password, self.config)
                 login_method = os.getenv("SGCC_LOGIN_METHOD", "password").strip().lower()
+                allow_fallback = self._allow_login_fallback(trigger_type)
                 if login_method in {"phone-code", "phone_code", "sms"}:
-                    logged_in = login_client.login(phone_code=True)
+                    logged_in = login_client.login(phone_code=True, allow_fallback=False)
                 else:
-                    allow_fallback = env_bool("SGCC_QRCODE_FALLBACK_UNATTENDED", False) or trigger_type == "manual"
                     logged_in = login_client.login(allow_fallback=allow_fallback)
                 if logged_in:
                     logging.info("登录成功!")

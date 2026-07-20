@@ -2,7 +2,7 @@ import sys
 import unittest
 from types import ModuleType, SimpleNamespace
 
-sys.modules.setdefault("schedule", SimpleNamespace())
+sys.modules.setdefault("schedule", SimpleNamespace(CancelJob=object()))
 _data_fetcher_stub = ModuleType("sgcc_ha_bridge.data_fetcher")
 _data_fetcher_stub.DataFetcher = object
 sys.modules.setdefault("sgcc_ha_bridge.data_fetcher", _data_fetcher_stub)

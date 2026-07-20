@@ -682,6 +682,11 @@ def _safe_env_snapshot() -> dict[str, Any]:
         "SGCC_DIAG",
         "SGCC_DIAG_DIR",
         "SGCC_LOGIN_COOLDOWN_ENABLED",
+        "SGCC_LOGIN_FALLBACK_UNATTENDED",
+        "SGCC_LOGIN_FALLBACK_METHODS",
+        "SGCC_LOGIN_INTERACTION_PROVIDER",
+        "SGCC_RISK_FALLBACK_OVERRIDE",
+        "SGCC_SMS_CODE_TIMEOUT_SECONDS",
         "SGCC_QRCODE_FALLBACK_UNATTENDED",
     )
     return {key: redact_scalar(os.getenv(key, ""), key) for key in keys if key in os.environ}

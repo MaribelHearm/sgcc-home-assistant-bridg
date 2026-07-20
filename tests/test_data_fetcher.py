@@ -1,3 +1,4 @@
+import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -107,6 +108,32 @@ class PathBSessionRetryTestCase(unittest.TestCase):
 
         self.assertEqual(result, [useful])
         self.assertEqual(scraper.fetch_all.call_count, 2)
+
+
+class LoginFallbackPolicyTestCase(unittest.TestCase):
+    def test_manual_trigger_allows_configured_fallback(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(DataFetcher._allow_login_fallback("manual"))
+
+    def test_scheduled_trigger_disallows_fallback_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(DataFetcher._allow_login_fallback("schedule"))
+
+    def test_scheduled_trigger_allows_unified_unattended_fallback(self):
+        with patch.dict(
+            os.environ,
+            {"SGCC_LOGIN_FALLBACK_UNATTENDED": "true"},
+            clear=True,
+        ):
+            self.assertTrue(DataFetcher._allow_login_fallback("schedule"))
+
+    def test_scheduled_trigger_keeps_legacy_qrcode_switch_compatible(self):
+        with patch.dict(
+            os.environ,
+            {"SGCC_QRCODE_FALLBACK_UNATTENDED": "true"},
+            clear=True,
+        ):
+            self.assertTrue(DataFetcher._allow_login_fallback("schedule"))
 
 
 if __name__ == "__main__":

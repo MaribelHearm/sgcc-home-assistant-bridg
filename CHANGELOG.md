@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- 每日定时抓取在持续运行期间会为下一天重新抽取 `SGCC_DAILY_JITTER_MINUTES` 偏移；每天两次任务仍共用当天偏移并保持 12 小时间隔。
+- 新增可配置的 `phone-code,qrcode` 人工登录兜底顺序，以及 Telegram Bot 二维码通知、短信验证码回复和结果通知。
+- 新增统一的 `SGCC_LOGIN_FALLBACK_UNATTENDED` 安全开关；默认定时任务不等待人工响应，旧 `SGCC_QRCODE_FALLBACK_UNATTENDED` 保持兼容。
+- 新增默认关闭的 `SGCC_RISK_FALLBACK_OVERRIDE`；只有本次任务原本允许 fallback 时，才可在 RK001 后尝试一次已配置的限时人工接管，失败仍进入冷却。
+
 ## [v0.1.5] - 2026-07-03
 
 ### Changed

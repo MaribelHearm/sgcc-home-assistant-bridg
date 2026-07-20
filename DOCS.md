@@ -205,16 +205,24 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `HASS_URL` | Home Assistant 地址，REST 发布使用。 |
 | `HASS_TOKEN` | Home Assistant 长期访问令牌，REST 发布使用。 |
 | `JOB_START_TIME` | 每日抓取基准时间，格式 `HH:MM`。 |
-| `SGCC_DAILY_JITTER_MINUTES` | 每日抓取相对基准时间的随机偏移窗口，范围 `0..180`，默认 `10`（即 ±10 分钟）；设为 `0` 关闭。每次进程启动抽取一次，持续运行期间每天沿用该实际时间。 |
-| `SGCC_DAILY_RUNS` | 每天真实登录抓取次数；无人值守建议保持 `1`，设为 `2` 可恢复早晚两次，两次共用同一启动偏移并保持 12 小时间隔。 |
+| `SGCC_DAILY_JITTER_MINUTES` | 每日抓取相对基准时间的随机偏移窗口，范围 `0..180`，默认 `10`（即 ±10 分钟）；设为 `0` 关闭。持续运行期间每天重新抽取。 |
+| `SGCC_DAILY_RUNS` | 每天真实登录抓取次数；无人值守建议保持 `1`，设为 `2` 可恢复早晚两次；当天两次共用同一偏移并保持 12 小时间隔。 |
 | `RETRY_TIMES_LIMIT` | 登录、验证码或抓取失败时的重试次数上限；风控类失败会熔断，不参与立即重试。 |
 | `RISK_COOLDOWN_MINUTES` | RK001/操作频繁/验证码通过但仍失败后的登录冷却分钟数，默认 `60`。 |
 | `SGCC_LOGIN_COOLDOWN_ENABLED` | 是否启用无人值守登录冷却，建议保持 `true`。 |
-| `SGCC_QRCODE_FALLBACK_UNATTENDED` | 定时无人值守任务是否允许二维码兜底；默认 `false`，避免无人扫码时长时间挂起。 |
+| `SGCC_RISK_FALLBACK_OVERRIDE` | RK001 后是否允许尝试已配置的短信验证码/二维码人工接管；默认 `false`，保持直接冷却。它不绕过任务级 fallback 门控，也不是风控重试开关。 |
+| `SGCC_LOGIN_FALLBACK_UNATTENDED` | 定时无人值守任务是否允许短信验证码/二维码交互兜底；默认 `false`，避免无人响应时挂起。手动任务始终允许已配置的兜底方式。 |
+| `SGCC_QRCODE_FALLBACK_UNATTENDED` | 旧二维码专用兼容开关；建议新配置使用 `SGCC_LOGIN_FALLBACK_UNATTENDED`。 |
+| `SGCC_LOGIN_FALLBACK_METHODS` | 密码/点选验证码失败后的兜底顺序，逗号分隔；支持 `phone-code`、`qrcode`，例如 `phone-code,qrcode`。未设置时兼容读取 `LOGIN_FALLBACK`。 |
+| `SGCC_LOGIN_INTERACTION_PROVIDER` | 登录人工交互提供方：`auto`、`telegram`、`url`、`both`、`none`；默认 `auto`，启用已完整配置的 Telegram，并兼容 `PUSH_QRCODE_URL`。 |
+| `SGCC_TELEGRAM_BOT_TOKEN` | Telegram Bot Token；敏感配置，不进入日志和 Debug 环境快照。兼容 `TG_BOT_TOKEN`。 |
+| `SGCC_TELEGRAM_CHAT_ID` | 唯一允许接收二维码和回复短信验证码的 Telegram Chat ID。兼容 `TG_CHAT_ID`。 |
+| `SGCC_TELEGRAM_API_BASE_URL` | Telegram Bot API 地址，默认 `https://api.telegram.org`；兼容 `TG_API_BASE_URL`。仅接受无 URL 凭证、查询参数或 fragment 的 HTTPS 地址。 |
+| `SGCC_SMS_CODE_TIMEOUT_SECONDS` | 等待短信验证码回复的秒数，范围 `30..600`，默认 `180`。 |
 | `LLM_API_KEY` | OpenAI 兼容多模态接口 Key；也兼容 `ARK_API_KEY`。 |
 | `LLM_BASE_URL` | OpenAI 兼容接口 Base URL；也兼容 `ARK_BASE_URL`。 |
 | `LLM_MODEL` | 多模态模型名或接入点 ID；也兼容 `ARK_MODEL`。 |
-| `LOGIN_FALLBACK` | 登录失败兜底方式；`qrcode` 表示二维码人工扫码，默认只建议手动任务使用。 |
+| `LOGIN_FALLBACK` | 旧登录兜底配置；`qrcode` 表示二维码人工扫码。新配置建议使用 `SGCC_LOGIN_FALLBACK_METHODS`。 |
 | `PUBLISHER` | 发布方式：`mqtt`、`rest`、`both`；推荐 `mqtt`。`both` 会同时发布 MQTT Discovery 和 HA REST state。 |
 | `MQTT_HOST` | MQTT broker 地址。 |
 | `MQTT_PORT` | MQTT broker 端口。 |
@@ -232,7 +240,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `DEBUG_MODE` | 旧环境变量兼容别名；仅开启 Debug，不再切换手机验证码登录。 |
 | `SGCC_CLEANUP_LEGACY_ENTITY_IDS` | 设为 `true` 时清理旧版仅使用户号末四位的 REST entity；默认 `false`，用于完成仪表盘迁移后的一次性清理。 |
 | `PUSH_TIMEOUT` | PushPlus、URL 通知和二维码通知的 HTTP 超时秒数，默认 `10`；通知失败不会改变国网抓取或 HA/MQTT 发布状态。 |
-| `SGCC_LOGIN_METHOD` | 登录方式；默认 `password`，仅显式设为 `phone-code` 时读取手机验证码。 |
+| `SGCC_LOGIN_METHOD` | 主登录方式；默认 `password`。显式设为 `phone-code` 时直接执行短信验证码登录，验证码可从 Telegram 当前提示消息的回复中获取；交互式终端仍可本地输入。 |
 | `REPUBLISH_INTERVAL_MINUTES` | 已有数据重发布或补抓的间隔分钟数。 |
 | `SGCC_BROWSER_MODE` | 浏览器模式，Docker Compose 和 Add-on 默认 `browser-service`；旧模式可设 `local`。 |
 | `SGCC_CDP_ADDRESS` | `browser-service` / `host-cdp` 使用的 Chrome DevTools 地址，默认 `127.0.0.1:19222`。 |
@@ -283,17 +291,43 @@ SGCC_DAILY_RUNS=1
 SGCC_DAILY_JITTER_MINUTES=10
 SGCC_LOGIN_COOLDOWN_ENABLED=true
 RISK_COOLDOWN_MINUTES=60
-SGCC_QRCODE_FALLBACK_UNATTENDED=false
+SGCC_LOGIN_FALLBACK_UNATTENDED=false
 ```
 
 说明：
 
 - 因已支持近 30 天日用电抓取，每天一次成功抓取通常足够补齐近期历史。
 - 默认不安排 12 小时后的第二次真实登录，降低晚间固定时间命中风控的概率。
-- `SGCC_DAILY_JITTER_MINUTES` 默认在基准时间前后 10 分钟内偏移，设为 `0` 可关闭，最大支持 `180`。偏移在每次容器/进程启动时抽取一次，持续运行期间不会每天重抽；该配置只减少固定时刻访问特征，不保证规避或解决 RK001，也不能替代低频登录和风控冷却。
+- `SGCC_DAILY_JITTER_MINUTES` 默认在基准时间前后 10 分钟内偏移，设为 `0` 可关闭，最大支持 `180`。持续运行期间会在当天最后一次任务结束后为下一天重新抽取；容器当天中途启动时只安排尚未到达的任务。如果设置每天两次，两次共用当天偏移并保持 12 小时间隔。该配置只减少固定时刻访问特征，不保证规避或解决 RK001，也不能替代低频登录和风控冷却。
 - `RETRY_TIMES_LIMIT` 仍用于登录失败或 session 明确过期等普通临时失败。登录已成功但 Path B 动态业务数据暂时为空时，程序会先在同一个浏览器 session 内恢复一次；只有明确确认 session 已过期才会重新登录。session 仍有效或状态无法确认时，恢复耗尽后会停止本轮，避免额外消耗登录次数。
 - RK001、操作频繁、验证码通过但登录仍失败、验证码多次识别失败会被视为不适合立即重试。
-- 二维码兜底适合人工手动排障，不适合作为默认无人值守路径。
+- 短信验证码和二维码兜底都属于限时人工接管路径。默认定时任务不进入兜底；手动任务会按 `SGCC_LOGIN_FALLBACK_METHODS` 的顺序尝试。
+- 遇到 RK001 时默认直接进入风控冷却，不继续切换短信验证码或二维码。只有显式设置 `SGCC_RISK_FALLBACK_OVERRIDE=true`，并且本次任务原本就允许 fallback 时，才会按已配置顺序尝试一次限时人工接管；定时任务还必须同时设置 `SGCC_LOGIN_FALLBACK_UNATTENDED=true`。接管未成功仍保留原始 `risk_blocked` 分类并进入冷却。该开关适合已经确认“密码登录持续 RK001、短信登录仍可用”的场景，不是风控重试或绕过开关，也不代表 RK001 根因已解决。
+
+### Telegram 登录交互
+
+配置示例：
+
+```env
+SGCC_LOGIN_FALLBACK_METHODS="phone-code,qrcode"
+SGCC_LOGIN_INTERACTION_PROVIDER=telegram
+SGCC_TELEGRAM_BOT_TOKEN="123456:your-bot-token"
+SGCC_TELEGRAM_CHAT_ID="123456789"
+SGCC_SMS_CODE_TIMEOUT_SECONDS=180
+
+# 安全默认：RK001 直接冷却；确认短信登录可用后才谨慎开启
+SGCC_RISK_FALLBACK_OVERRIDE=false
+# 安全默认：定时任务不等待人工响应；确认 Telegram 可用后再显式开启
+SGCC_LOGIN_FALLBACK_UNATTENDED=false
+```
+
+当前行为：
+
+- 二维码会作为 Telegram 图片发送到配置的唯一 Chat ID，扫码成功、失败或超时后发送结果通知；本地临时二维码使用 `0600` 权限并在流程结束后删除。
+- 短信登录会先在 95598 页面触发“发送验证码”，然后通过 Telegram Bot 发出强制回复提示。程序只接受配置 Chat ID 对**本次提示消息**的 4～8 位纯数字回复，旧消息、其他聊天和非纯数字文本不会被当作验证码。
+- 验证码不会写入日志、Debug bundle 或通知结果；超时后本轮登录安全取消。
+- Telegram 使用长轮询 `getUpdates`。同一个 Bot 不应同时由其他 webhook/长轮询程序消费更新；如已有专用 Bot，建议为本项目新建独立 Bot。
+- Bot API 是外部服务，二维码和短信验证码属于敏感登录材料。只向你控制的私聊 Chat ID 发送；自定义 `SGCC_TELEGRAM_API_BASE_URL` 仅接受无 URL 凭证、查询参数或 fragment 的 HTTPS 地址，并且必须信任该代理。
 
 ## 5. Home Assistant 实体
 
@@ -353,7 +387,7 @@ examples/basic/lovelace-sgcc-electricity.yaml
 
 - 户号在日志、MQTT discovery、entity unique id 等位置会脱敏。
 - SQLite 数据库默认保存在本机 `/data/sgcc.sqlite3`。
-- 程序不会把电费/用电数据发送到 Home Assistant、MQTT broker 和你配置的 LLM 验证码接口之外的目的地。
+- 程序只会把电费/用电数据发布到你配置的 Home Assistant 和 MQTT broker。腾讯点选验证码会发送给你配置的 LLM；只有显式配置登录交互时，二维码或短信验证码提示才会发送给对应通知服务。
 - 腾讯点选验证码识别会把验证码截图发送给你配置的 OpenAI 兼容 LLM 服务；请根据所选服务隐私条款自行评估。
 - 请不要提交真实 `.env`、国网密码、Home Assistant Token、MQTT 凭据和 LLM API Key。
 
@@ -370,15 +404,27 @@ examples/basic/lovelace-sgcc-electricity.yaml
 
 ### RK001
 
-`网络连接超时（RK001）` 通常不像普通网络超时，更像登录页/验证码风控命中。可能原因：
+`网络连接超时（RK001）` 通常不像普通网络超时，更像登录页或国网服务端的风控分类。可能原因包括：
 
-- Docker / Xvfb / Linux Chromium 指纹触发风控。
-- 登录页资源或腾讯验证码脚本没完整加载。
-- 当前账号、IP、会话组合被风控。
+- 当前账号、IP、登录频率或会话组合被风控。
+- Docker / Linux / Xvfb / CDP / browser profile 的整体环境指纹与桌面浏览器不同。
+- 容器和桌面使用不同网络出口、DNS 或 IPv4/IPv6 路径。
+- browser 镜像构建较早，运行中的 Google Chrome 版本与当前桌面浏览器存在差异。
+
+Issue #23 的 2026-07-17 附件显示，Docker 流程已经完成账号密码和腾讯点选验证码，日志明确出现“验证码已通过”，随后才收到 RK001。因此该样本不是验证码识别失败，而是登录提交后的服务端拒绝。两个 app/browser 日志附件内容完全相同，现有 Debug bundle 又没有 Chrome/ChromeDriver 版本、User-Agent、`navigator.webdriver`、platform、languages、timezone、screen 等信息，所以目前**不能证明 Chrome 版本固定或过旧就是根因**。
+
+`Dockerfile.browser` 安装的是未锁定具体版本的 `google-chrome-stable`；但镜像构建后，容器中的 Chrome 会保持在构建时版本，直到重新拉取镜像并 recreate 容器。排查时先记录：
+
+```bash
+docker exec sgcc_browser google-chrome --version
+curl http://sgcc_browser:39222/json/version
+```
+
+再与成功登录的桌面浏览器对比 User-Agent、`navigator.webdriver`、platform、languages、hardware concurrency、screen、timezone 和网络出口。如果 pull/recreate browser 镜像后仍然 RK001，应优先继续比较 CDP、Xvfb、WebDriver、profile 和网络环境差异，而不是只归因于 Chrome 主版本号。
 
 Docker Compose 和 Add-on 部署优先使用默认的 `SGCC_BROWSER_MODE=browser-service`：它把浏览器换成官方 Google Chrome，并按需启动/关闭 Chrome。Compose 通过 `sgcc_browser` sidecar 实现，Add-on 通过单容器内嵌 browser manager 实现。
 
-项目检测到 RK001、操作过于频繁、验证码通过后仍停留登录页等情况后，会停止本轮立即重试，并写入 `/data/sgcc_login_cooldown.json` 冷却状态。冷却期间定时任务不会继续触发真实国网登录；已有 HA/MQTT 数据仍会优先通过缓存重发布维持展示。
+项目检测到 RK001、操作过于频繁、验证码通过后仍停留登录页等情况后，默认会停止本轮立即重试，并写入 `/data/sgcc_login_cooldown.json` 冷却状态。冷却期间定时任务不会继续触发真实国网登录；已有 HA/MQTT 数据仍会优先通过缓存重发布维持展示。每日随机偏移与人工短信/二维码 fallback 只能降低固定访问特征或提供恢复通道，不能视为 RK001 根因修复。
 
 ### 验证码一直被识别为 slider
 
@@ -460,13 +506,15 @@ docker manifest inspect crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.c
 
 | 方向 | 上游项目 | 本项目 |
 | --- | --- | --- |
-| 登录路径 | 已有账号密码登录、LLM 视觉验证码和二维码兜底 | 拆出 `login.py` / `browser.py`，增加登录态判定、受控导航、错误现场保存和脱敏日志；二维码只作为 fallback。 |
+| 登录路径 | 已有账号密码登录、LLM 视觉验证码和二维码兜底 | 拆出 `login.py` / `browser.py`，增加登录态判定、受控导航、错误现场保存和脱敏日志；增加可配置的短信验证码/二维码人工接管与 Telegram 交互。 |
 | 浏览器运行 | Selenium + Chrome/Chromium | Docker Compose 默认官方 Google Chrome sidecar + CDP attach，Add-on 默认单容器内嵌官方 Google Chrome browser-service，兼容旧的 Debian Chromium + Xvfb + ChromeDriver；页面/脚本超时控制，每轮用完释放。 |
 | 抓取方式 | 页面取值与 Vue component data / Vue state 辅助解析 | 将 Vue/Vuex 取数主路径化，读取 store snapshot + 组件 data，交给 `parser.py` 合并归一。 |
 | 数据覆盖 | 已覆盖余额、预付费/欠费、日/月/年用电、月峰/平/谷/尖等 | 统一归一、去重、落库和重发布这些业务数据，提升恢复与排障体验。 |
 | 存储模型 | 可选 SQLite/MySQL，表结构偏每日用电与 key-value 扩展 | 规范化 SQLite fact store：账户、余额、日/月/年、抓取 run、会话检查、发布状态。 |
 | HA 发布 | REST states API 传感器为主 | MQTT Discovery 自动建实体，同时保留 REST 兼容路径。 |
 | 缓存恢复 | 有旧缓存/数据库能力 | 增加 SQLite/旧 REST 状态重发布、空缓存判定、retained MQTT state。 |
+
+Telegram 短信/二维码交互的需求与用户体验思路参考了 Apache-2.0 项目 [`renxiaoyaoo/ha-95598`](https://github.com/renxiaoyaoo/ha-95598)；本项目基于自身登录、通知和冷却架构独立实现，未复制其代码。
 
 ## 11. 关键词
 

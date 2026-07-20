@@ -8,7 +8,8 @@ import json
 import random
 from .error_watcher import ErrorWatcher
 from .sensor_updator import SensorUpdator
-from datetime import datetime,timedelta
+from datetime import date, datetime, timedelta
+from typing import Callable
 from .const import *
 from .config import FetcherConfig
 from .cache_validity import (
@@ -56,6 +57,93 @@ def _daily_schedule_times(job_start_time: str, jitter_minutes: int, daily_runs: 
     if daily_runs >= 2:
         run_times.append((first_run + timedelta(hours=12)).strftime("%H:%M"))
     return offset_minutes, run_times
+
+
+class DailyJitterScheduler:
+    """Schedule one logical day's runs, then draw a new offset for the next day."""
+
+    def __init__(
+        self,
+        scheduler,
+        job_start_time: str,
+        jitter_minutes: int,
+        daily_runs: int,
+        job_func: Callable,
+        *job_args,
+        randint=random.randint,
+        now: Callable[[], datetime] = datetime.now,
+    ):
+        self.scheduler = scheduler
+        self.job_start_time = job_start_time
+        self.jitter_minutes = jitter_minutes
+        self.daily_runs = daily_runs
+        self.job_func = job_func
+        self.job_args = job_args
+        self.randint = randint
+        self.now = now
+        self._scheduled_for: date | None = None
+        self._jobs = []
+
+    def schedule_day(self, target_date: date | None = None) -> list[datetime]:
+        target_date = target_date or self.now().date()
+        current_time = self.now()
+        while True:
+            offset_minutes, run_times = _daily_schedule_times(
+                self.job_start_time,
+                self.jitter_minutes,
+                self.daily_runs,
+                randint=self.randint,
+            )
+            first_time = datetime.strptime(self.job_start_time, "%H:%M").time()
+            first_run = datetime.combine(target_date, first_time) + timedelta(minutes=offset_minutes)
+            run_datetimes = [first_run]
+            if self.daily_runs >= 2:
+                run_datetimes.append(first_run + timedelta(hours=12))
+            future_runs = [
+                (run_index, run_at)
+                for run_index, run_at in enumerate(run_datetimes, start=1)
+                if run_at > current_time
+            ]
+            if future_runs:
+                break
+            target_date += timedelta(days=1)
+
+        self.clear()
+        for position, (run_index, run_at) in enumerate(future_runs):
+            job = self.scheduler.every().day.at(run_at.strftime("%H:%M")).do(
+                safe_scheduled_job,
+                self._run_once,
+                target_date,
+                run_index,
+                run_at,
+                position == len(future_runs) - 1,
+            )
+            job.next_run = run_at
+            self._jobs.append(job)
+
+        self._scheduled_for = target_date
+        scheduled_times = [run_at.strftime("%H:%M") for _, run_at in future_runs]
+        logging.info(
+            f"已为 {target_date.isoformat()} 抽取每日抓取偏移 {offset_minutes:+d} 分钟，"
+            f"本次进程后续实际时间={' 和 '.join(scheduled_times)}。"
+        )
+        return [run_at for _, run_at in future_runs]
+
+    def _run_once(self, target_date: date, run_index: int, run_at: datetime, is_last: bool):
+        if self.now() - run_at > timedelta(hours=6):
+            logging.warning(
+                f"跳过延迟超过 6 小时的 {target_date.isoformat()} 第 {run_index} 次每日抓取任务。"
+            )
+        else:
+            self.job_func(*self.job_args)
+        if is_last:
+            self.schedule_day(target_date + timedelta(days=1))
+        return schedule.CancelJob
+
+    def clear(self) -> None:
+        for job in self._jobs:
+            self.scheduler.cancel_job(job)
+        self._jobs = []
 
 
 def main():
@@ -111,24 +199,27 @@ def main():
     updator = SensorUpdator() if config.PUBLISHER in {"rest", "both"} else None
 
     jitter_minutes = _daily_jitter_minutes()
-    random_delay_minutes, daily_run_times = _daily_schedule_times(
-        JOB_START_TIME,
-        jitter_minutes,
-        SGCC_DAILY_RUNS,
-    )
     masked_phone = DataFetcher._mask_secret(PHONE_NUMBER)
     logging.info(
         f"当前登录用户名为 {masked_phone}，Home Assistant 地址为 {HASS_URL}。"
-        f"每日抓取基准时间={JOB_START_TIME}，本次进程启动使用随机窗口=±{jitter_minutes} 分钟，"
-        f"抽取偏移={random_delay_minutes:+d} 分钟，实际时间={daily_run_times[0]}。"
+        f"每日抓取基准时间={JOB_START_TIME}，每日会重新从 ±{jitter_minutes} 分钟窗口抽取偏移。"
     )
 
-    for run_time in daily_run_times:
-        schedule.every().day.at(run_time).do(safe_scheduled_job, run_task, fetcher, "schedule")
-    if len(daily_run_times) >= 2:
-        logging.info(f"立即执行任务！下次运行时间为每天 {' 和 '.join(daily_run_times)}，两次共用同一启动偏移。")
+    daily_scheduler = DailyJitterScheduler(
+        schedule,
+        JOB_START_TIME,
+        jitter_minutes,
+        SGCC_DAILY_RUNS,
+        safe_scheduled_job,
+        run_task,
+        fetcher,
+        "schedule",
+    )
+    daily_scheduler.schedule_day()
+    if SGCC_DAILY_RUNS >= 2:
+        logging.info("立即执行任务！持续运行期间每天重新抽取偏移，当天两次任务保持 12 小时间隔。")
     else:
-        logging.info(f"立即执行任务！下次运行时间为每天 {daily_run_times[0]}；无人值守模式默认不安排晚间第二次登录。")
+        logging.info("立即执行任务！持续运行期间每天重新抽取偏移；无人值守模式默认不安排晚间第二次登录。")
 
     # 定期重发数据，防止HA重启后数据丢失
     # 如果缓存数据日期与当前日期不一致，则从国家电网重新获取数据

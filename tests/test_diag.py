@@ -85,6 +85,25 @@ class DiagSwitchTestCase(unittest.TestCase):
             collector.record_runtime(stage="test")
             self.assertEqual(collector.runtime["env"]["SGCC_DAILY_JITTER_MINUTES"], "45")
 
+    def test_runtime_includes_login_fallback_switches_without_telegram_credentials(self):
+        with patch.dict(
+            os.environ,
+            {
+                "SGCC_RISK_FALLBACK_OVERRIDE": "true",
+                "SGCC_LOGIN_FALLBACK_UNATTENDED": "false",
+                "SGCC_TELEGRAM_BOT_TOKEN": "sensitive-token",
+                "SGCC_TELEGRAM_CHAT_ID": "123456789",
+            },
+            clear=False,
+        ):
+            collector = DiagnosticCollector()
+            collector.record_runtime(stage="test")
+
+        self.assertEqual(collector.runtime["env"]["SGCC_RISK_FALLBACK_OVERRIDE"], "true")
+        self.assertEqual(collector.runtime["env"]["SGCC_LOGIN_FALLBACK_UNATTENDED"], "false")
+        self.assertNotIn("SGCC_TELEGRAM_BOT_TOKEN", collector.runtime["env"])
+        self.assertNotIn("SGCC_TELEGRAM_CHAT_ID", collector.runtime["env"])
+
     def test_legacy_diag_switch_keeps_legacy_output_directory(self):
         with patch.dict(
             os.environ,

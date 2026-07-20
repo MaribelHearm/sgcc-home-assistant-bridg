@@ -73,6 +73,13 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `SGCC_DIAG` | 旧诊断开关兼容别名，等价于 `SGCC_DEBUG`。 |
 | `SGCC_BROWSER_MODE` | 默认 `browser-service`；如需回滚旧 Chromium 模式，可改为 `local`。 |
 | `SGCC_BROWSER_SERVICE_STOP_ON_RELEASE` | 默认 `true`；每轮抓取结束后关闭 Chrome 本体，降低常驻资源占用。 |
+| `SGCC_DAILY_JITTER_MINUTES` | 每日抓取相对基准时间的随机偏移窗口，默认 `10` 分钟；持续运行时每天重新抽取。 |
+| `SGCC_LOGIN_FALLBACK_METHODS` | 人工登录兜底顺序，例如 `phone-code,qrcode`。 |
+| `SGCC_LOGIN_INTERACTION_PROVIDER` | 登录交互提供方；使用 Telegram 时设为 `telegram`。 |
+| `SGCC_TELEGRAM_BOT_TOKEN` | Telegram Bot Token；敏感字段，只发送到你控制的 Bot。 |
+| `SGCC_TELEGRAM_CHAT_ID` | 唯一允许接收二维码并回复短信验证码的私聊 Chat ID。 |
+| `SGCC_LOGIN_FALLBACK_UNATTENDED` | 定时任务是否等待人工短信/扫码；默认 `false`。 |
+| `SGCC_RISK_FALLBACK_OVERRIDE` | RK001 后是否允许人工接管；默认 `false`，保持直接冷却。 |
 
 ![Configuration 页面示例，敏感字段已遮挡](img/current/04-configuration-redacted.png)
 
@@ -83,6 +90,19 @@ LLM_BASE_URL = https://ark.cn-beijing.volces.com/api/v3
 LLM_API_KEY  = ark-xxxxxxxx
 LLM_MODEL    = ep-xxxxxxxx
 ```
+
+```text
+SGCC_LOGIN_FALLBACK_METHODS = phone-code,qrcode
+SGCC_LOGIN_INTERACTION_PROVIDER = telegram
+SGCC_TELEGRAM_BOT_TOKEN = <your-bot-token>
+SGCC_TELEGRAM_CHAT_ID = <your-private-chat-id>
+
+# 安全默认：定时任务不等待人工响应，RK001 直接冷却
+SGCC_LOGIN_FALLBACK_UNATTENDED = false
+SGCC_RISK_FALLBACK_OVERRIDE = false
+```
+
+启用后，二维码会发送到配置的私聊；短信验证码必须直接回复 Bot 本次发出的提示消息，程序只接受 4～8 位纯数字。默认配置不会让 Add-on 的定时任务停下来等待人工输入。只有已经确认“密码登录持续 RK001、短信登录仍可用”时，才应谨慎开启 `SGCC_RISK_FALLBACK_OVERRIDE`；定时任务还必须同时开启 `SGCC_LOGIN_FALLBACK_UNATTENDED`。详细安全边界与排障说明见 [`DOCS.md`](../DOCS.md#telegram-登录交互)。
 
 ### 4. 启动
 
@@ -156,6 +176,6 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 - 查看 Add-on 日志。
 - 需要反馈 issue 时，把 `SGCC_DEBUG` 临时设为 `true` 后重新运行一次，附上 `/data/debug/latest/sgcc-debug-bundle.zip`。Debug 目录权限为 `0700`，包和内部源文件权限为 `0600`。
 - 查看 `/data/errors` 中的 `meta.redacted.json`。该目录默认不保存原始 HTML 和截图，并只保留最近 10 次错误现场。
-- 如果出现 `RK001`，通常是 95598 / 腾讯验证码风控命中，本项目会停止本轮，避免反复打账号。
+- 如果出现 `RK001`，通常是 95598 登录风控命中。本项目默认停止本轮并进入冷却，避免反复打账号。短信/二维码人工接管默认不会在 RK001 后自动启用，详见 [`DOCS.md`](../DOCS.md#rk001)。
 - Add-on 和 Docker Compose 默认都使用 `SGCC_BROWSER_MODE=browser-service`。Add-on 内嵌官方 Google Chrome browser manager；Docker Compose 使用官方 Google Chrome sidecar。
 - 如果当前环境不适合新模式，可以把 `SGCC_BROWSER_MODE` 改成 `local` 回滚到 Debian Chromium + Xvfb。
