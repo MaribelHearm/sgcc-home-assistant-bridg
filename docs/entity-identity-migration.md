@@ -2,11 +2,35 @@
 
 v0.1.6 把账户身份从“仅户号末四位 / 脱敏户号”升级为隐私且防碰撞的 `末四位_稳定摘要`。新的 canonical 身份能区分末四位相同的不同户号，但 v0.1.6/v0.1.7 会在发布新 MQTT Discovery 后删除旧 Discovery，导致仍引用旧实体 ID 的 Lovelace、自动化或脚本失效。
 
-v0.1.8 是兼容迁移版本：默认不要求使用 Home Assistant API，也不要求改变 `PUBLISHER`。升级后程序会从 SQLite 缓存或下一次成功抓取自动重发兼容 Discovery。
+v0.1.8 是兼容迁移版本，不要求改变 `PUBLISHER`。它的 MQTT 旧 ID 兼容不会新增 HA API 依赖；如果原本使用 `PUBLISHER=rest|both`，bridge 仍会像之前一样通过 HA REST API 发布状态实体。
 
-## 先说结论：兼容和 HA API 迁移不是一回事
+## 先说结论：三条路径，HA API 有两个用途
 
-### 1. MQTT 旧 ID 兼容：bridge 自动完成
+### 1. HA REST states 发布：HA API 用途之一
+
+当配置为：
+
+```env
+PUBLISHER="rest" # 或 both
+HASS_URL="http://homeassistant:8123"
+HASS_TOKEN="..."
+```
+
+bridge 会持续调用：
+
+```text
+POST /api/states/<entity_id>
+```
+
+把国网数据发布为 HA state machine 中的 REST 状态实体。这条路径：
+
+- 需要 HA URL 和 token；
+- 由 `PUBLISHER=rest|both` 控制；
+- 使用 `sensor.electricity_charge_balance_<entity-key>` 等 REST 命名；
+- 不使用 MQTT Discovery，也不受 `MQTT_LEGACY_DISCOVERY_MODE` 控制；
+- 旧 REST 实体清理由 `SGCC_CLEANUP_LEGACY_ENTITY_IDS` 单独控制。
+
+### 2. MQTT Discovery 与旧 ID 兼容：不使用 HA API
 
 保持默认配置：
 
@@ -16,12 +40,14 @@ MQTT_LEGACY_DISCOVERY_MODE="compat"
 
 bridge 会在 canonical v2 发布成功后，额外恢复无冲突的 v0.1.5 MQTT Discovery 身份。这样仍写着旧 entity ID 的 dashboard、自动化和脚本可以继续读取相同状态。
 
-- 不需要 Home Assistant token 或 API；
+- MQTT 发布和 `compat` 本身不需要 Home Assistant token 或 API；
 - 不会修改 HA 中 canonical 实体的现有 entity ID；
 - 旧别名和 canonical 实体复用同一个 MQTT 状态主题；
 - 这是默认升级路径。
 
-### 2. HA UI/API 实体 ID 迁移：用户可选执行
+如果同时使用 `PUBLISHER=both`，REST 那一半仍然会使用 HA API；“不需要 HA API”只是在说明 MQTT 兼容机制本身没有新增这一依赖。
+
+### 3. HA 实体注册表迁移：HA API 用途之二
 
 如果 HA 曾经给 canonical 实体生成中文 ID、冲突后缀 `_2`，或者你希望统一成稳定 ID，可以通过 HA UI、实体注册表 API 或 WebSocket 将其重命名，例如：
 
@@ -30,7 +56,7 @@ sensor.guo_wang_dian_fei_0123_dian_fei_yu_e_0123_2
 → sensor.sgcc_0123_e2161a7e19_balance
 ```
 
-这一步只是修改 HA 实体注册表中的 `entity_id`：
+这一步使用的是 HA entity registry API/WebSocket，和 `/api/states` 发布不是同一件事。它只修改 HA 实体注册表中的 `entity_id`：
 
 - 不会创建旧 MQTT 别名；
 - 不会开启或替代 `compat`；
@@ -54,12 +80,12 @@ sensor.guo_wang_dian_fei_0123_dian_fei_yu_e_0123_2
 
 | 当前目标 | 操作 | HA API |
 | --- | --- | --- |
-| 只想升级后旧卡片马上恢复 | 保持 `compat`，等待缓存重发 | 不需要 |
-| 全新安装或没有旧 ID 引用 | 使用 canonical v2；通常无需额外操作 | 不需要 |
-| 想去掉中文 ID 或 `_2`，统一成稳定 canonical ID | 先备份，再用 HA UI/API 重命名，随后修改全部引用方 | 需要 |
-| 正在逐步迁移旧卡片 | 保持 `compat`，一项项改到 canonical ID | API 仅在需要重命名 canonical 实体时使用 |
-| 已确认旧 ID 引用为 0，想删除旧 MQTT 别名 | 改为 `cleanup`，验证后再考虑 `off` | 不需要 |
-| 使用 `PUBLISHER=rest` | 按 REST 实体和清理开关管理；与 MQTT `compat` 独立 | 通常不需要 |
+| 通过 REST states 发布实体 | 使用 `PUBLISHER=rest|both`，配置 `HASS_URL/HASS_TOKEN` | 运行时需要 |
+| 只想让旧 MQTT 卡片马上恢复 | 保持 `compat`，等待缓存重发 | MQTT 兼容本身不需要 |
+| 全新 MQTT 安装或没有旧 ID 引用 | 使用 canonical v2；通常无需额外操作 | MQTT 路径不需要 |
+| 想去掉中文 ID 或 `_2`，统一成稳定 canonical ID | 先备份，再用 HA entity registry API 重命名，随后修改全部引用方 | 迁移时需要 |
+| 正在逐步迁移旧 MQTT 卡片 | 保持 `compat`，一项项改到 canonical ID | 仅重命名 canonical 实体时需要 |
+| 已确认旧 MQTT ID 引用为 0，想删除旧别名 | 改为 `cleanup`，验证后再考虑 `off` | 不需要 |
 
 ## 谁会受影响
 
@@ -110,7 +136,7 @@ sensor.guo_wang_dian_fei_0123_dian_fei_yu_e_0123_2
 
 ## 可选的 HA UI/API 实体 ID 迁移
 
-普通升级不需要 HA API。这里的 API 迁移不是“开启兼容”，而是修改 HA 实体注册表中的现有 `entity_id`。希望让 canonical 实体使用整洁且固定的 ID 时，可以在 Home Assistant UI 中重命名，或使用受支持的实体注册表 API/工具迁移。
+这里的 API 迁移不是 `/api/states` 发布，也不是“开启兼容”，而是修改 HA 实体注册表中的现有 `entity_id`。希望让 canonical MQTT 实体使用整洁且固定的 ID 时，可以在 Home Assistant UI 中重命名，或使用受支持的实体注册表 API/工具迁移。
 
 推荐顺序：
 

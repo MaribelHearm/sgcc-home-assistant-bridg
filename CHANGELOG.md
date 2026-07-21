@@ -16,7 +16,7 @@
 
 ### Compatibility
 
-- `PUBLISHER=rest|mqtt|both` 全部保留；默认升级无需 Home Assistant API，也不要求改用 `both`。
+- `PUBLISHER=rest|mqtt|both` 全部保留；MQTT 旧 ID 兼容不会新增 Home Assistant API 依赖，也不要求改用 `both`。原有 `rest|both` 仍按配置使用 HA REST states API。
 - v0.1.6 引入 `末四位_稳定摘要` 身份时会删除旧 MQTT Discovery，属于需要修改旧 entity ID 引用的实体身份变更；v0.1.8 为该升级路径提供默认兼容和自愈。
 
 ## [v0.1.7] - 2026-07-21
