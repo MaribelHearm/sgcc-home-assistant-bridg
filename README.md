@@ -96,7 +96,16 @@ MQTT_LEGACY_DISCOVERY_MODE="compat"
 
 `compat` 会先发布 canonical v2 实体，再为**末四位唯一**的户号恢复原 v0.1.5 MQTT Discovery 身份；不需要 Home Assistant API，也不要求改用 `PUBLISHER=both`。旧别名复用 canonical 状态主题，不是第二份数据源。若同一账号下有多个户号末四位相同，旧身份无法证明归属，程序会安全撤销该别名，只保留各自独立的 canonical 实体。
 
-不要在仪表盘、自动化、脚本等消费者全部迁移前启用 `cleanup`。`PUBLISHER=rest|mqtt|both` 均继续支持；HA UI/API 重命名 canonical 实体是可选的高级迁移路径，不是升级前提。完整的验证、迁移与回滚步骤见 [实体身份迁移说明](docs/entity-identity-migration.md)。
+这里有两件互相独立的事：
+
+| 目的 | 由谁完成 | 是否需要 HA API |
+| --- | --- | --- |
+| 让仍引用旧 entity ID 的卡片、自动化和脚本继续工作 | bridge 的 `MQTT_LEGACY_DISCOVERY_MODE=compat` 恢复旧 MQTT 别名 | 不需要 |
+| 把 HA 注册表中现有 canonical 实体整理成稳定的 `sensor.sgcc_<entity-key>_<role>` ID | 用户通过 HA UI、实体注册表 API 或 WebSocket 重命名，并同步修改引用 | 可选，需要 |
+
+HA API **不是兼容开关**：它不会创建旧实体别名，也不会自动修改 Lovelace、自动化或脚本。文档中的“引用方”是指任何写有某个 entity ID 的配置或程序，例如 dashboard 卡片、Jinja 模板、自动化、脚本、场景、template sensor、Node-RED 或外部 API 调用。
+
+不要在所有旧 entity ID 引用都已修改并验证前启用 `cleanup`。`PUBLISHER=rest|mqtt|both` 均继续支持；HA UI/API 迁移不是升级前提。完整的选择表、操作顺序与回滚步骤见 [实体身份迁移说明](docs/entity-identity-migration.md)。
 
 ## 实体和数据
 

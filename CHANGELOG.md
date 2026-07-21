@@ -11,13 +11,13 @@
 ### Added
 
 - canonical MQTT Discovery 显式发布 `default_entity_id=sensor.sgcc_<末四位_稳定摘要>_<key>`，冻结新安装的实体命名契约。
-- 新增 `MQTT_LEGACY_DISCOVERY_MODE=compat|off|cleanup`；`off` 不触碰旧 retained Discovery，`cleanup` 仅供所有旧消费者迁移完成后显式清理。
+- 新增 `MQTT_LEGACY_DISCOVERY_MODE=compat|off|cleanup`；`off` 不触碰旧 retained Discovery，`cleanup` 仅供所有旧 entity ID 引用迁移完成后显式清理。
 - 新增独立实体迁移文档、canonical Lovelace 示例契约和 v0.1.5 → v0.1.8 回归测试。
 
 ### Compatibility
 
 - `PUBLISHER=rest|mqtt|both` 全部保留；默认升级无需 Home Assistant API，也不要求改用 `both`。
-- v0.1.6 引入 `末四位_稳定摘要` 身份时会删除旧 MQTT Discovery，属于需要消费者迁移的实体身份变更；v0.1.8 为该升级路径提供默认兼容和自愈。
+- v0.1.6 引入 `末四位_稳定摘要` 身份时会删除旧 MQTT Discovery，属于需要修改旧 entity ID 引用的实体身份变更；v0.1.8 为该升级路径提供默认兼容和自愈。
 
 ## [v0.1.7] - 2026-07-21
 
