@@ -468,6 +468,7 @@ Debug bundle 默认写入：
 ├── summary.txt
 ├── summary.json
 ├── browser-runtime.json
+├── login-network.json
 ├── fields.redacted.json
 ├── observations.redacted.json
 ├── candidates.redacted.json
@@ -477,7 +478,9 @@ Debug bundle 默认写入：
 └── sgcc-debug-bundle.zip
 ```
 
-`browser-runtime.json` 记录登录关键阶段的 Chrome/ChromeDriver 版本、User-Agent、`navigator.webdriver`、platform、languages、timezone、screen/window、device pixel ratio、WebGL/GPU 和自动化全局变量等无凭证运行态；不读取 cookie、localStorage、sessionStorage 的值。Debug 模式还会在登录前启动只记录 URL、HTTP 状态、资源类型和响应大小的 Network metadata 采集，登录阶段不读取响应 body，避免 token 或账号数据进入取证包。
+`browser-runtime.json` 记录登录关键阶段的 Chrome/ChromeDriver 版本、User-Agent、`navigator.webdriver`、platform、languages、timezone、screen/window、device pixel ratio、WebGL/GPU 和自动化全局变量等无凭证运行态；不读取 cookie、localStorage、sessionStorage 的值。
+
+`login-network.json` 从 CDP Network 事件记录登录页和登录接口真正发出的白名单请求头，包括 `User-Agent`、`Accept-Language`、`sec-ch-ua`、`sec-ch-ua-platform`、`sec-ch-ua-mobile`，并与 JS 运行态生成一致性检查；同时记录 HTTP 协议、远端地址、连接复用、缓存、TLS 协议/套件及安全时序。登录阶段不读取请求体或响应 body，`Cookie`、`Authorization` 和其他未列入白名单的请求头不会写入取证包。
 
 其中生产 observation 按户号和页面 scope 关联 Network XHR/fetch、Vuex 和受字段契约限制的 Vue Component 数据；必要的严格 DOM label/value 作为生产 fallback。完整受预算约束的 Vue Component `$data` 与额外 DOM 仅写入诊断取证，不进入 parser。Component 快照具有组件级和全局节点预算、深度/数组/字段上限及执行时间上限；截断位置保留在 bundle。parser decision 记录每个来源是接受、拒绝还是 fallback；未知金额只进入候选，不会被猜测发布。
 

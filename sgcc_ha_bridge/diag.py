@@ -74,6 +74,7 @@ _SENSITIVE_LABEL_RE = re.compile(
 )
 _LABEL_KEYS = {"label", "title", "fieldname", "keyname"}
 _LABEL_VALUE_KEYS = {"value", "val", "content", "text", "displayvalue", "fieldvalue"}
+_NON_PII_TECHNICAL_KEYS = {"sec-ch-ua-mobile"}
 
 
 def env_truthy(name: str, default: bool = False) -> bool:
@@ -330,6 +331,7 @@ class DiagnosticCollector:
             "summary_txt": str(latest_dir / "summary.txt"),
             "summary_json": str(latest_dir / "summary.json"),
             "fields_json": str(latest_dir / "fields.redacted.json"),
+            "login_network_json": str(latest_dir / "login-network.json"),
             "observations_json": str(latest_dir / "observations.redacted.json"),
             "candidates_json": str(latest_dir / "candidates.redacted.json"),
             "decisions_json": str(latest_dir / "parser-decisions.json"),
@@ -381,6 +383,7 @@ class DiagnosticCollector:
         lines.append(
             "debug="
             f"browser_runtime={len(self.browser_runtime)}, "
+            f"login_network={len(self._login_network_observations())}, "
             f"observations={len(self.observations)}, "
             f"candidates={len(self.candidates)}, "
             f"decisions={len(self.decisions)}, "
@@ -448,6 +451,7 @@ class DiagnosticCollector:
             "browser_runtime": self.browser_runtime,
             "debug": {
                 "browser_runtime_count": len(self.browser_runtime),
+                "login_network_count": len(self._login_network_observations()),
                 "observation_count": len(self.observations),
                 "candidate_count": len(self.candidates),
                 "decision_count": len(self.decisions),
@@ -472,6 +476,14 @@ class DiagnosticCollector:
                 "generated_at": self.generated_at,
                 "run_id": self.run_id,
                 "captures": self.browser_runtime,
+            }),
+            "login-network.json": redact_structure({
+                "status": self.status,
+                "generated_at": self.generated_at,
+                "run_id": self.run_id,
+                "browser_runtime_reference": self._browser_fingerprint_reference(),
+                "requests": self._login_network_observations(),
+                "comparisons": self._login_network_comparisons(),
             }),
             "observations.redacted.json": redact_structure({
                 "status": self.status,
@@ -504,6 +516,58 @@ class DiagnosticCollector:
                 "timeline": self.timeline,
             }),
         }
+
+    def _login_network_observations(self) -> list[dict[str, Any]]:
+        return [
+            item
+            for item in self.observations
+            if item.get("source") == "network_metadata"
+            and item.get("scope_id") == "login"
+        ]
+
+    def _browser_fingerprint_reference(self) -> dict[str, Any]:
+        for capture in reversed(self.browser_runtime):
+            snapshot = capture.get("snapshot") or {}
+            page = snapshot.get("page") or {}
+            webdriver = snapshot.get("webdriver") or {}
+            if page:
+                return {
+                    "stage": capture.get("stage"),
+                    "user_agent": page.get("userAgent"),
+                    "language": page.get("language"),
+                    "languages": page.get("languages") or [],
+                    "platform": page.get("platform"),
+                    "max_touch_points": page.get("maxTouchPoints"),
+                    "browser_version": webdriver.get("browser_version"),
+                }
+        return {}
+
+    def _login_network_comparisons(self) -> list[dict[str, Any]]:
+        browser = self._browser_fingerprint_reference()
+        comparisons: list[dict[str, Any]] = []
+        for observation in self._login_network_observations():
+            payload = observation.get("payload") or {}
+            request = payload.get("request") or {}
+            headers = request.get("fingerprint_headers") or {}
+            comparisons.append({
+                "url": (observation.get("metadata") or {}).get("url"),
+                "method": request.get("method"),
+                "resource_type": request.get("resource_type"),
+                "actual_headers": headers,
+                "missing_headers": [
+                    name
+                    for name in (
+                        "user-agent",
+                        "accept-language",
+                        "sec-ch-ua",
+                        "sec-ch-ua-platform",
+                        "sec-ch-ua-mobile",
+                    )
+                    if name not in headers
+                ],
+                "checks": _compare_request_fingerprint(headers, browser),
+            })
+        return comparisons
 
     def _run_dir(self) -> Path:
         stamp = re.sub(r"[^0-9T]", "", (self.started_at or now_iso()).split("+", 1)[0].replace("-", "").replace(":", ""))
@@ -765,6 +829,73 @@ def _write_private_text(path: Path, content: str) -> None:
     path.chmod(0o600)
 
 
+def _compare_request_fingerprint(
+    headers: dict[str, Any],
+    browser: dict[str, Any],
+) -> dict[str, Optional[bool]]:
+    user_agent = str(headers.get("user-agent") or "")
+    browser_user_agent = str(browser.get("user_agent") or "")
+    accept_language = str(headers.get("accept-language") or "")
+    browser_language = str(browser.get("language") or "")
+    browser_platform = str(browser.get("platform") or "")
+    client_hint_platform = str(headers.get("sec-ch-ua-platform") or "").strip('"')
+    browser_version = str(browser.get("browser_version") or "")
+    sec_ch_ua = str(headers.get("sec-ch-ua") or "")
+    sec_ch_ua_mobile = str(headers.get("sec-ch-ua-mobile") or "")
+
+    language_primary = accept_language.split(",", 1)[0].split(";", 1)[0].strip()
+    browser_major = browser_version.split(".", 1)[0] if browser_version else ""
+    expected_mobile = "?1" if re.search(
+        r"(Android|Mobile|iPhone|iPad)",
+        browser_user_agent,
+        re.IGNORECASE,
+    ) else "?0"
+
+    return {
+        "user_agent_matches_js": (
+            user_agent == browser_user_agent
+            if user_agent and browser_user_agent
+            else None
+        ),
+        "accept_language_primary_matches_js": (
+            language_primary.lower() == browser_language.lower()
+            if language_primary and browser_language
+            else None
+        ),
+        "sec_ch_ua_platform_matches_js": (
+            _platform_family(client_hint_platform)
+            == _platform_family(browser_platform)
+            if client_hint_platform and browser_platform
+            else None
+        ),
+        "sec_ch_ua_contains_browser_major": (
+            f'v="{browser_major}"' in sec_ch_ua
+            if browser_major and sec_ch_ua
+            else None
+        ),
+        "sec_ch_ua_mobile_matches_user_agent": (
+            sec_ch_ua_mobile == expected_mobile
+            if sec_ch_ua_mobile and browser_user_agent
+            else None
+        ),
+    }
+
+
+def _platform_family(value: str) -> str:
+    normalized = value.strip().lower()
+    if "android" in normalized:
+        return "android"
+    if any(item in normalized for item in ("iphone", "ipad", "ios")):
+        return "ios"
+    if "win" in normalized:
+        return "windows"
+    if any(item in normalized for item in ("mac", "darwin")):
+        return "macos"
+    if "linux" in normalized:
+        return "linux"
+    return normalized
+
+
 def _iter_snapshot_roots(snapshot: dict[str, Any]):
     store = snapshot.get("store") if isinstance(snapshot, dict) else None
     if isinstance(store, dict):
@@ -948,6 +1079,8 @@ def _is_secret_key(key: str) -> bool:
 
 
 def _is_pii_key(key: str) -> bool:
+    if str(key or "").casefold() in _NON_PII_TECHNICAL_KEYS:
+        return False
     return bool(_PII_KEY_RE.search(key or ""))
 
 
