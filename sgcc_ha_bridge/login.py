@@ -20,6 +20,14 @@ from .login_interaction import build_login_interaction, read_sms_code
 from .redact import mask_secret, redact_text
 
 
+ACCOUNT_LOGIN_SELECTOR = "#login_box .account-login"
+PASSWORD_FORM_SELECTOR = "#login_box .account-login .password_form"
+PASSWORD_TAB_SELECTOR = "#login_box .selectlogin-type .password_login"
+PASSWORD_TERMS_SELECTOR = (
+    "#login_box .account-login .password_form .checked-box.un-checked"
+)
+
+
 class SgccLogin:
     def __init__(
         self,
@@ -126,12 +134,11 @@ class SgccLogin:
 
         element = WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME).until(
             EC.presence_of_element_located((By.CLASS_NAME, 'user')))
-        self._click_element(driver, element)
-        logging.info("已找到 'user' 元素。\r")
-        self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[1]/div[1]/div[2]/span')
+        logging.info("已找到 'user' 元素，准备切换账号登录。\r")
+        self._ensure_password_login_form(driver, element)
         time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
         # 点击同意按钮
-        self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[1]/form/div[1]/div[3]/div/span[2]')
+        self._click_button(driver, By.CSS_SELECTOR, PASSWORD_TERMS_SELECTOR)
         logging.info("已点击同意选项。\r")
         time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
         if phone_code:
@@ -267,6 +274,184 @@ class SgccLogin:
         WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME).until(EC.element_to_be_clickable(click_element))
         self._click_element(driver, click_element)
         time.sleep(random.uniform(0.1, 0.5))
+
+    def _ensure_password_login_form(self, driver, user_element) -> None:
+        """Switch from QR view and verify the password form actually became visible."""
+        initial_state = self._login_ui_state(driver)
+        self._record_debug_event("ui_state_before_account_switch", **initial_state)
+        if initial_state["password_form_visible"]:
+            logging.info("密码登录表单已显示，无需重复切换登录标签。\r")
+            self._record_debug_event(
+                "password_form_ready",
+                switch_method="already-visible",
+            )
+            return
+
+        if not initial_state["account_login_visible"]:
+            switch_method = self._click_until_visible(
+                driver,
+                user_element,
+                ACCOUNT_LOGIN_SELECTOR,
+                label="账号登录入口",
+            )
+            if switch_method is None:
+                state = self._login_ui_state(driver)
+                self._record_debug_event(
+                    "account_switch_failed",
+                    capture_browser=True,
+                    **state,
+                )
+                raise LoginFailure(
+                    "login_ui_failed",
+                    "点击账号登录入口后密码登录面板未显示",
+                )
+            logging.info(f"账号登录面板已显示，点击方式={switch_method}。\r")
+            self._record_debug_event(
+                "account_switch_succeeded",
+                switch_method=switch_method,
+            )
+
+        if not self._visible_css(driver, PASSWORD_FORM_SELECTOR):
+            try:
+                password_tab = WebDriverWait(driver, 5).until(
+                    EC.visibility_of_element_located(
+                        (By.CSS_SELECTOR, PASSWORD_TAB_SELECTOR)
+                    )
+                )
+            except TimeoutException as error:
+                self._record_debug_event(
+                    "password_tab_missing",
+                    capture_browser=True,
+                    **self._login_ui_state(driver),
+                )
+                raise LoginFailure(
+                    "login_ui_failed",
+                    "账号登录面板已显示但未找到密码登录标签",
+                ) from error
+            switch_method = self._click_until_visible(
+                driver,
+                password_tab,
+                PASSWORD_FORM_SELECTOR,
+                label="密码登录标签",
+            )
+            if switch_method is None:
+                self._record_debug_event(
+                    "password_tab_switch_failed",
+                    capture_browser=True,
+                    **self._login_ui_state(driver),
+                )
+                raise LoginFailure(
+                    "login_ui_failed",
+                    "点击密码登录标签后密码表单未显示",
+                )
+
+        self._record_debug_event(
+            "password_form_ready",
+            **self._login_ui_state(driver),
+        )
+
+    def _click_until_visible(
+        self,
+        driver,
+        element,
+        target_selector: str,
+        *,
+        label: str,
+    ) -> Optional[str]:
+        attempts = (
+            (
+                "native",
+                lambda: ActionChains(driver).move_to_element(element).pause(
+                    random.uniform(0.08, 0.25)
+                ).click().perform(),
+            ),
+            ("webdriver", element.click),
+            (
+                "javascript",
+                lambda: driver.execute_script("arguments[0].click();", element),
+            ),
+        )
+        for method, action in attempts:
+            try:
+                action()
+            except Exception as error:
+                error_detail = redact_text(error)[:500]
+                logging.warning(
+                    f"{label}点击失败，方式={method}, "
+                    f"error={type(error).__name__}: {error_detail}"
+                )
+                self._record_debug_event(
+                    "ui_click_attempt",
+                    label=label,
+                    method=method,
+                    result="error",
+                    error_type=type(error).__name__,
+                    error=error_detail,
+                )
+                continue
+            if self._wait_for_visible_css(driver, target_selector, timeout=2):
+                self._record_debug_event(
+                    "ui_click_attempt",
+                    label=label,
+                    method=method,
+                    result="target-visible",
+                )
+                return method
+            logging.warning(
+                f"{label}点击后页面状态未切换，准备回退下一点击方式: {method}"
+            )
+            self._record_debug_event(
+                "ui_click_attempt",
+                label=label,
+                method=method,
+                result="no-transition",
+            )
+        return None
+
+    @staticmethod
+    def _visible_css(driver, selector: str) -> bool:
+        try:
+            return bool(driver.execute_script("""
+                const element = document.querySelector(arguments[0]);
+                if (!element) return false;
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    Number(style.opacity || 1) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0;
+            """, selector))
+        except Exception:
+            return False
+
+    def _wait_for_visible_css(self, driver, selector: str, timeout: float) -> bool:
+        try:
+            WebDriverWait(driver, timeout, poll_frequency=0.2).until(
+                lambda current_driver: self._visible_css(
+                    current_driver,
+                    selector,
+                )
+            )
+            return True
+        except TimeoutException:
+            return False
+
+    def _login_ui_state(self, driver) -> dict[str, bool]:
+        return {
+            "account_login_visible": self._visible_css(
+                driver,
+                ACCOUNT_LOGIN_SELECTOR,
+            ),
+            "password_form_visible": self._visible_css(
+                driver,
+                PASSWORD_FORM_SELECTOR,
+            ),
+            "password_tab_visible": self._visible_css(
+                driver,
+                PASSWORD_TAB_SELECTOR,
+            ),
+        }
 
     @staticmethod
     def _click_element(driver, element) -> None:

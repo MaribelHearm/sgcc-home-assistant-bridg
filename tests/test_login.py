@@ -71,6 +71,85 @@ class LoginFallbackTestCase(unittest.TestCase):
 
         self.assertFalse(SgccLogin.is_logged_in_page(driver))
 
+    def test_password_form_ready_skips_redundant_account_switch(self):
+        login = SgccLogin.__new__(SgccLogin)
+        login.diagnostic = None
+        login._login_ui_state = Mock(return_value={
+            "account_login_visible": True,
+            "password_form_visible": True,
+            "password_tab_visible": True,
+        })
+        user_element = Mock()
+
+        login._ensure_password_login_form(Mock(), user_element)
+
+        user_element.click.assert_not_called()
+
+    def test_account_switch_falls_back_when_native_click_does_not_change_state(self):
+        login = SgccLogin.__new__(SgccLogin)
+        login.diagnostic = Mock()
+        login._login_ui_state = Mock(return_value={
+            "account_login_visible": False,
+            "password_form_visible": False,
+            "password_tab_visible": False,
+        })
+        login._wait_for_visible_css = Mock(side_effect=[False, True])
+        login._visible_css = Mock(return_value=True)
+        driver = Mock()
+        user_element = Mock()
+        action_chain = Mock()
+        action_chain.move_to_element.return_value = action_chain
+        action_chain.pause.return_value = action_chain
+        action_chain.click.return_value = action_chain
+
+        with patch("sgcc_ha_bridge.login.ActionChains", return_value=action_chain):
+            login._ensure_password_login_form(driver, user_element)
+
+        action_chain.perform.assert_called_once()
+        user_element.click.assert_called_once()
+        driver.execute_script.assert_not_called()
+        login.diagnostic.record_timeline.assert_any_call(
+            "login_ui_click_attempt",
+            label="账号登录入口",
+            method="native",
+            result="no-transition",
+        )
+        login.diagnostic.record_timeline.assert_any_call(
+            "login_ui_click_attempt",
+            label="账号登录入口",
+            method="webdriver",
+            result="target-visible",
+        )
+
+    def test_account_switch_failure_raises_non_generic_login_failure(self):
+        login = SgccLogin.__new__(SgccLogin)
+        login.diagnostic = None
+        login._login_ui_state = Mock(return_value={
+            "account_login_visible": False,
+            "password_form_visible": False,
+            "password_tab_visible": False,
+        })
+        login._wait_for_visible_css = Mock(return_value=False)
+        driver = Mock()
+        user_element = Mock()
+        action_chain = Mock()
+        action_chain.move_to_element.return_value = action_chain
+        action_chain.pause.return_value = action_chain
+        action_chain.click.return_value = action_chain
+
+        with patch(
+            "sgcc_ha_bridge.login.ActionChains",
+            return_value=action_chain,
+        ), self.assertRaises(LoginFailure) as raised:
+            login._ensure_password_login_form(driver, user_element)
+
+        self.assertEqual(raised.exception.category, "login_ui_failed")
+        user_element.click.assert_called_once()
+        driver.execute_script.assert_called_once_with(
+            "arguments[0].click();",
+            user_element,
+        )
+
     @patch("sgcc_ha_bridge.login.build_login_interaction")
     @patch("sgcc_ha_bridge.login.read_sms_code")
     def test_phone_code_requires_confirmed_authenticated_state(self, read_code, build_interaction):
