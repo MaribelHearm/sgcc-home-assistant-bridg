@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from typing import Optional
 from urllib.parse import urlparse
 
 from selenium import webdriver
@@ -9,7 +10,7 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 import requests
 
 from .config import FetcherConfig
-from .redact import redact_text
+from .redact import redact_text, redact_url
 
 
 def build_driver(config: FetcherConfig):
@@ -168,36 +169,180 @@ def _apply_browser_consistency(driver, browser_lang: str) -> None:
         logging.warning(f"CDP 设置 locale 失败: {error}")
 
 
-def _log_browser_runtime(driver) -> None:
-    if os.getenv("SGCC_DEBUG", "").strip().lower() not in {"1", "true", "yes", "on"}:
-        return
+def collect_browser_runtime(driver, stage: str = "runtime") -> dict:
+    """Collect a credential-free browser fingerprint snapshot for diagnostics."""
+    snapshot = {
+        "stage": stage,
+        "browser_mode": _normalize_browser_mode(os.getenv("SGCC_BROWSER_MODE", "local")),
+        "configured": {
+            "language": os.getenv("BROWSER_LANGUAGE", "zh-CN,zh,en-US,en"),
+            "timezone": os.getenv("BROWSER_TIMEZONE", "Asia/Shanghai"),
+            "window_size": os.getenv("BROWSER_WINDOW_SIZE", "1280,900"),
+            "device_scale_factor": os.getenv("BROWSER_DEVICE_SCALE_FACTOR", "2"),
+            "cdp_address": _cdp_address_from_env(),
+        },
+    }
     try:
-        snapshot = driver.execute_script("""
+        snapshot["page"] = driver.execute_script("""
+            const webgl = (() => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl') ||
+                        canvas.getContext('experimental-webgl');
+                    if (!gl) return {available: false};
+                    const info = gl.getExtension('WEBGL_debug_renderer_info');
+                    return {
+                        available: true,
+                        vendor: info ? gl.getParameter(info.UNMASKED_VENDOR_WEBGL) : null,
+                        renderer: info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : null,
+                        version: gl.getParameter(gl.VERSION),
+                        shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION)
+                    };
+                } catch (error) {
+                    return {available: false, error: error.name};
+                }
+            })();
             return {
                 userAgent: navigator.userAgent,
                 webdriver: navigator.webdriver,
                 platform: navigator.platform,
+                vendor: navigator.vendor,
                 language: navigator.language,
-                languages: navigator.languages,
+                languages: Array.from(navigator.languages || []),
                 hardwareConcurrency: navigator.hardwareConcurrency,
                 deviceMemory: navigator.deviceMemory || null,
-                screen: `${screen.width}x${screen.height}`,
-                viewport: `${window.innerWidth}x${window.innerHeight}`,
-                outerWindow: `${window.outerWidth}x${window.outerHeight}`,
+                maxTouchPoints: navigator.maxTouchPoints,
+                cookieEnabled: navigator.cookieEnabled,
+                doNotTrack: navigator.doNotTrack,
+                pdfViewerEnabled: navigator.pdfViewerEnabled,
+                screen: {
+                    width: screen.width,
+                    height: screen.height,
+                    availWidth: screen.availWidth,
+                    availHeight: screen.availHeight,
+                    colorDepth: screen.colorDepth,
+                    pixelDepth: screen.pixelDepth
+                },
+                window: {
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                    outerWidth: window.outerWidth,
+                    outerHeight: window.outerHeight,
+                    devicePixelRatio: window.devicePixelRatio
+                },
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                cdcKeys: Object.keys(window).filter((key) => key.startsWith('cdc_')).slice(0, 20)
+                locale: Intl.DateTimeFormat().resolvedOptions().locale,
+                pluginNames: Array.from(navigator.plugins || []).map((item) => item.name).slice(0, 20),
+                mimeTypeCount: (navigator.mimeTypes || []).length,
+                automationGlobals: Object.keys(window).filter((key) =>
+                    key.startsWith('cdc_') ||
+                    key.startsWith('__webdriver') ||
+                    key.startsWith('__selenium')
+                ).slice(0, 30),
+                webgl
             };
         """)
-        capabilities = getattr(driver, "capabilities", {}) or {}
-        chrome = capabilities.get("chrome") or {}
-        snapshot["browserVersion"] = capabilities.get("browserVersion")
-        snapshot["chromeDriverVersion"] = str(chrome.get("chromedriverVersion") or "").split(" ", 1)[0]
+        snapshot["current_url"] = redact_url(str(getattr(driver, "current_url", "") or ""))
+    except Exception as error:
+        snapshot["page_error"] = redact_text(f"{type(error).__name__}: {error}")
+
+    capabilities = getattr(driver, "capabilities", {}) or {}
+    chrome = capabilities.get("chrome") or {}
+    snapshot["webdriver"] = {
+        "browser_name": capabilities.get("browserName"),
+        "browser_version": capabilities.get("browserVersion"),
+        "platform_name": capabilities.get("platformName"),
+        "page_load_strategy": capabilities.get("pageLoadStrategy"),
+        "chromedriver_version": str(chrome.get("chromedriverVersion") or "").split(" ", 1)[0],
+    }
+
+    try:
+        version = driver.execute_cdp_cmd("Browser.getVersion", {})
+        snapshot["cdp_version"] = {
+            key: version.get(key)
+            for key in (
+                "protocolVersion",
+                "product",
+                "revision",
+                "userAgent",
+                "jsVersion",
+            )
+        }
+    except Exception as error:
+        snapshot["cdp_version_error"] = redact_text(
+            f"{type(error).__name__}: {error}"
+        )
+
+    try:
+        system_info = driver.execute_cdp_cmd("SystemInfo.getInfo", {})
+        gpu = system_info.get("gpu") or {}
+        snapshot["system_info"] = {
+            "model_name": system_info.get("modelName"),
+            "model_version": system_info.get("modelVersion"),
+            "gpu_devices": [
+                {
+                    key: device.get(key)
+                    for key in (
+                        "vendorId",
+                        "deviceId",
+                        "subSysId",
+                        "revision",
+                        "vendorString",
+                        "deviceString",
+                        "driverVendor",
+                        "driverVersion",
+                    )
+                }
+                for device in (gpu.get("devices") or [])[:8]
+            ],
+            "aux_attributes": {
+                key: value
+                for key, value in (gpu.get("auxAttributes") or {}).items()
+                if key in {
+                    "displayType",
+                    "glImplementationParts",
+                    "glRenderer",
+                    "glVendor",
+                    "glVersion",
+                    "passthroughCmdDecoder",
+                    "sandboxed",
+                }
+            },
+            "feature_status": gpu.get("featureStatus") or {},
+        }
+    except Exception as error:
+        snapshot["system_info_error"] = redact_text(
+            f"{type(error).__name__}: {error}"
+        )
+
+    return snapshot
+
+
+def _debug_browser_runtime_enabled() -> bool:
+    return any(
+        os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+        for name in ("SGCC_FORCE_DEBUG", "SGCC_DEBUG", "SGCC_DIAG", "DEBUG_MODE")
+    )
+
+
+def _log_browser_runtime(driver, stage: str = "driver_ready") -> Optional[dict]:
+    if not _debug_browser_runtime_enabled():
+        return None
+    try:
+        snapshot = collect_browser_runtime(driver, stage=stage)
+        history = getattr(driver, "_sgcc_browser_runtime", None)
+        if not isinstance(history, list):
+            history = []
+            driver._sgcc_browser_runtime = history
+        history.append(snapshot)
         logging.info(
             "浏览器运行态（不含凭证）: %s",
             json.dumps(snapshot, ensure_ascii=False, sort_keys=True),
         )
+        return snapshot
     except Exception as error:
         logging.warning(f"读取浏览器运行态失败: {error}")
+        return None
 
 
 def _normalize_browser_mode(value: str) -> str:

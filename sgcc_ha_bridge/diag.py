@@ -85,7 +85,12 @@ def env_truthy(name: str, default: bool = False) -> bool:
 
 def debug_enabled() -> bool:
     """Canonical debug switch with SGCC_DIAG kept as a compatibility alias."""
-    return env_truthy("SGCC_DEBUG") or env_truthy("SGCC_DIAG") or env_truthy("DEBUG_MODE")
+    return (
+        env_truthy("SGCC_FORCE_DEBUG")
+        or env_truthy("SGCC_DEBUG")
+        or env_truthy("SGCC_DIAG")
+        or env_truthy("DEBUG_MODE")
+    )
 
 
 def diag_enabled() -> bool:
@@ -93,7 +98,11 @@ def diag_enabled() -> bool:
 
 
 def diag_output_root() -> Path:
-    if env_truthy("SGCC_DEBUG") or env_truthy("DEBUG_MODE"):
+    if (
+        env_truthy("SGCC_FORCE_DEBUG")
+        or env_truthy("SGCC_DEBUG")
+        or env_truthy("DEBUG_MODE")
+    ):
         return Path(os.getenv("SGCC_DEBUG_DIR") or DEFAULT_DIAG_DIR)
     if env_truthy("SGCC_DIAG"):
         return Path(os.getenv("SGCC_DIAG_DIR") or LEGACY_DIAG_DIR)
@@ -123,6 +132,7 @@ class DiagnosticCollector:
         self.accounts: list[dict[str, Any]] = []
         self.publish: list[dict[str, Any]] = []
         self.errors: list[dict[str, Any]] = []
+        self.browser_runtime: list[dict[str, Any]] = []
         self.timeline: list[dict[str, Any]] = []
         self.observations: list[dict[str, Any]] = []
         self.candidates: list[dict[str, Any]] = []
@@ -182,6 +192,13 @@ class DiagnosticCollector:
             "at": now_iso(),
             "event": event,
             **details,
+        }))
+
+    def record_browser_runtime(self, stage: str, snapshot: dict[str, Any]) -> None:
+        self.browser_runtime.append(redact_structure({
+            "captured_at": now_iso(),
+            "stage": stage,
+            "snapshot": snapshot,
         }))
 
     def record_observations(self, observations: list[Observation]) -> None:
@@ -363,6 +380,7 @@ class DiagnosticCollector:
         )
         lines.append(
             "debug="
+            f"browser_runtime={len(self.browser_runtime)}, "
             f"observations={len(self.observations)}, "
             f"candidates={len(self.candidates)}, "
             f"decisions={len(self.decisions)}, "
@@ -427,7 +445,9 @@ class DiagnosticCollector:
             "pages": self.pages,
             "publish": self.publish,
             "errors": self.errors,
+            "browser_runtime": self.browser_runtime,
             "debug": {
+                "browser_runtime_count": len(self.browser_runtime),
                 "observation_count": len(self.observations),
                 "candidate_count": len(self.candidates),
                 "decision_count": len(self.decisions),
@@ -447,6 +467,12 @@ class DiagnosticCollector:
 
     def debug_files(self) -> dict[str, Any]:
         return {
+            "browser-runtime.json": redact_structure({
+                "status": self.status,
+                "generated_at": self.generated_at,
+                "run_id": self.run_id,
+                "captures": self.browser_runtime,
+            }),
             "observations.redacted.json": redact_structure({
                 "status": self.status,
                 "generated_at": self.generated_at,
@@ -684,6 +710,7 @@ def _safe_env_snapshot() -> dict[str, Any]:
         "SCRAPER_SETTLE_SECONDS",
         "DEBUG_MODE",
         "SGCC_DEBUG",
+        "SGCC_FORCE_DEBUG",
         "SGCC_DEBUG_DIR",
         "SGCC_DIAG",
         "SGCC_DIAG_DIR",

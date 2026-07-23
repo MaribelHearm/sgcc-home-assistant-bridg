@@ -21,11 +21,44 @@ from .redact import mask_secret, redact_text
 
 
 class SgccLogin:
-    def __init__(self, driver, username: str, password: str, config: FetcherConfig):
+    def __init__(
+        self,
+        driver,
+        username: str,
+        password: str,
+        config: FetcherConfig,
+        diagnostic=None,
+    ):
         self.driver = driver
         self._username = username
         self._password = password
         self.config = config
+        self.diagnostic = diagnostic
+
+    def _record_debug_event(
+        self,
+        event: str,
+        *,
+        capture_browser: bool = False,
+        **details,
+    ) -> None:
+        diagnostic = getattr(self, "diagnostic", None)
+        if diagnostic is None:
+            return
+        try:
+            diagnostic.record_timeline(f"login_{event}", **details)
+            if capture_browser:
+                from .browser import collect_browser_runtime
+
+                diagnostic.record_browser_runtime(
+                    f"login_{event}",
+                    collect_browser_runtime(
+                        self.driver,
+                        stage=f"login_{event}",
+                    ),
+                )
+        except Exception as error:
+            logging.warning(f"记录登录 Debug 事件失败: {redact_text(error)}")
 
     @staticmethod
     def is_logged_in_page(driver) -> bool:
@@ -56,9 +89,16 @@ class SgccLogin:
     @ErrorWatcher.watch
     def login(self, phone_code=False, allow_fallback: bool = True, fallback_methods: Optional[list[str]] = None) -> bool:
         driver = self.driver
+        self._record_debug_event(
+            "started",
+            method="phone-code" if phone_code else "password",
+            fallback_enabled=allow_fallback,
+        )
         try:
             self._safe_get(driver, LOGIN_URL, "登录页面")
+            self._record_debug_event("page_loaded", capture_browser=True)
             if self.is_logged_in_page(driver):
+                self._record_debug_event("already_authenticated")
                 logging.info(f"打开登录页后检测到已登录态: {driver.current_url}")
                 return True
             try:
@@ -107,6 +147,7 @@ class SgccLogin:
 
             # 点击登录按钮
             self._click_button(driver, By.CLASS_NAME, "el-button.el-button--primary")
+            self._record_debug_event("password_submitted", capture_browser=True)
             time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT * 2)
             logging.info("已点击登录按钮。\r")
 
@@ -119,7 +160,13 @@ class SgccLogin:
             error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
             if error is None:
                 # 处理腾讯点击验证码
+                self._record_debug_event("password_captcha_started")
                 captcha_passed = solve_captcha_in_browser(driver, max_retries=self.config.RETRY_TIMES_LIMIT)
+                self._record_debug_event(
+                    "password_captcha_finished",
+                    capture_browser=True,
+                    passed=captcha_passed,
+                )
                 if captcha_passed:
                     time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
                     if driver.current_url != LOGIN_URL:
@@ -154,6 +201,12 @@ class SgccLogin:
                         return True
                     raise LoginFailure(category, error)
             else:
+                self._record_debug_event(
+                    "password_rejected",
+                    capture_browser=True,
+                    category=classify_login_failure(error),
+                    error=error,
+                )
                 logging.error(f"登录失败: [{error}]\r")
                 category = classify_login_failure(error)
                 ErrorWatcher.instance().capture(f"login_failed_{category}", error)
@@ -328,6 +381,7 @@ class SgccLogin:
 
     def _phone_code_login(self, driver, reason: str) -> bool:
         logging.info("短信验证码登录开始。")
+        self._record_debug_event("phone_code_started")
         self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[1]/div[1]/div[3]/span')
         time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
         input_elements = driver.find_elements(By.CLASS_NAME, "el-input__inner")
@@ -337,6 +391,7 @@ class SgccLogin:
         self._type_text(input_elements[2], self._username)
         logging.info(f"已输入用户名: {mask_secret(self._username)}\r")
         self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[1]/div[2]/div[2]/div/a')
+        self._record_debug_event("phone_code_requested")
 
         interaction = build_login_interaction()
         code = read_sms_code(interaction, reason)
@@ -347,16 +402,35 @@ class SgccLogin:
         code = None
         logging.info("已输入手机验证码。\r")
         self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[2]/div/button/span')
+        self._record_debug_event("phone_code_submitted", capture_browser=True)
         state, error = self._wait_for_login_submit_state(driver)
+        self._record_debug_event(
+            "phone_code_state",
+            capture_browser=True,
+            state=state,
+            error=error or "",
+        )
 
         if state == "captcha":
             logging.info("短信验证码提交后出现腾讯人机验证，开始处理。")
+            self._record_debug_event("phone_code_captcha_started")
             captcha_passed = solve_captcha_in_browser(
                 driver,
                 max_retries=self.config.RETRY_TIMES_LIMIT,
             )
+            self._record_debug_event(
+                "phone_code_captcha_finished",
+                capture_browser=True,
+                passed=captcha_passed,
+            )
             if captcha_passed:
                 state, error = self._wait_for_login_submit_state(driver)
+                self._record_debug_event(
+                    "phone_code_post_captcha_state",
+                    capture_browser=True,
+                    state=state,
+                    error=error or "",
+                )
             else:
                 error = (
                     self._get_error_message(driver, "//div[@class='errmsg-tip']//span")

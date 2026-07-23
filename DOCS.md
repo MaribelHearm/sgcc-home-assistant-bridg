@@ -467,6 +467,7 @@ Debug bundle 默认写入：
 /data/debug/latest/
 ├── summary.txt
 ├── summary.json
+├── browser-runtime.json
 ├── fields.redacted.json
 ├── observations.redacted.json
 ├── candidates.redacted.json
@@ -476,7 +477,11 @@ Debug bundle 默认写入：
 └── sgcc-debug-bundle.zip
 ```
 
+`browser-runtime.json` 记录登录关键阶段的 Chrome/ChromeDriver 版本、User-Agent、`navigator.webdriver`、platform、languages、timezone、screen/window、device pixel ratio、WebGL/GPU 和自动化全局变量等无凭证运行态；不读取 cookie、localStorage、sessionStorage 的值。Debug 模式还会在登录前启动只记录 URL、HTTP 状态、资源类型和响应大小的 Network metadata 采集，登录阶段不读取响应 body，避免 token 或账号数据进入取证包。
+
 其中生产 observation 按户号和页面 scope 关联 Network XHR/fetch、Vuex 和受字段契约限制的 Vue Component 数据；必要的严格 DOM label/value 作为生产 fallback。完整受预算约束的 Vue Component `$data` 与额外 DOM 仅写入诊断取证，不进入 parser。Component 快照具有组件级和全局节点预算、深度/数组/字段上限及执行时间上限；截断位置保留在 bundle。parser decision 记录每个来源是接受、拒绝还是 fallback；未知金额只进入候选，不会被猜测发布。
+
+`dev/**` 分支发布的 app 测试镜像构建时设置 `SGCC_FORCE_DEBUG=true`，即使用户配置中的 `SGCC_DEBUG=false` 也会生成上述 bundle；`main`、`latest` 和版本 tag 不强制开启。
 
 金额字段由 `sgcc_ha_bridge/field_contracts.py` 统一登记。新增省份字段需要脱敏 Debug 样本、fixture、字段语义和正负测试；Vue capture 与 parser 共用该注册表，避免分别追加猜测 alias。
 

@@ -50,6 +50,7 @@ class NetworkRecorder:
         *,
         max_body_bytes: Optional[int] = None,
         allowed_hosts: Optional[set[str]] = None,
+        unscoped_metadata_only: bool = False,
     ):
         self.driver = driver
         self.cdp_address = cdp_address_for_driver(driver)
@@ -64,6 +65,7 @@ class NetworkRecorder:
             if item.strip()
         }
         self.allowed_hosts = allowed_hosts or configured_hosts or {page_host, "95598.cn"}
+        self.unscoped_metadata_only = bool(unscoped_metadata_only)
         self._lock = threading.RLock()
         self._opened = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -255,6 +257,22 @@ class NetworkRecorder:
                 self._request_scopes.pop(request_id, None)
                 metadata = self._responses.pop(request_id, None)
             if not metadata:
+                return
+            if self.unscoped_metadata_only and metadata.get("scope") is None:
+                observation = Observation(
+                    source="network_metadata",
+                    scope_id="login",
+                    scope_label="登录阶段",
+                    payload={
+                        "status": metadata.get("status"),
+                        "mime_type": metadata.get("mime_type"),
+                        "resource_type": metadata.get("resource_type"),
+                        "encoded_data_length": encoded_length,
+                    },
+                    metadata={"url": metadata.get("url")},
+                )
+                with self._lock:
+                    self._observations.append(observation)
                 return
             if encoded_length > self.max_body_bytes:
                 self._record_error(

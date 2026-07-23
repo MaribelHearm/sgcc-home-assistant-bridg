@@ -154,6 +154,7 @@ jobs:
           platforms: linux/amd64
           build-args: |
             VERSION=${{ github.sha }}
+            SGCC_FORCE_DEBUG=${{ startsWith(github.ref, 'refs/heads/dev/') && 'true' || 'false' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-ghcr.outputs.tags }}
           labels: ${{ steps.meta-ghcr.outputs.labels }}
@@ -208,6 +209,7 @@ jobs:
           platforms: linux/amd64
           build-args: |
             VERSION=${{ github.sha }}
+            SGCC_FORCE_DEBUG=${{ startsWith(github.ref, 'refs/heads/dev/') && 'true' || 'false' }}
           push: true
           tags: ${{ steps.meta-aliyun.outputs.tags }}
           labels: ${{ steps.meta-aliyun.outputs.labels }}

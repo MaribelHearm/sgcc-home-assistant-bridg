@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from sgcc_ha_bridge.browser import (
     _apply_browser_consistency,
     _log_browser_runtime,
+    collect_browser_runtime,
     release_driver,
 )
 
@@ -37,6 +38,49 @@ class BrowserConsistencyTestCase(unittest.TestCase):
             _log_browser_runtime(driver)
 
         driver.execute_script.assert_not_called()
+
+    def test_runtime_snapshot_collects_browser_and_gpu_without_storage_values(self):
+        driver = Mock()
+        driver.current_url = "https://95598.cn/osgweb/login?token=secret"
+        driver.capabilities = {
+            "browserName": "chrome",
+            "browserVersion": "138.0.0.0",
+            "platformName": "linux",
+            "pageLoadStrategy": "normal",
+            "chrome": {"chromedriverVersion": "138.0.0.0 (abc)"},
+        }
+        driver.execute_script.return_value = {
+            "userAgent": "Mozilla/5.0 Test",
+            "webdriver": None,
+            "languages": ["zh-CN", "zh"],
+            "webgl": {"available": True, "renderer": "SwiftShader"},
+        }
+        driver.execute_cdp_cmd.side_effect = [
+            {
+                "protocolVersion": "1.3",
+                "product": "Chrome/138.0.0.0",
+                "revision": "r1",
+                "userAgent": "Mozilla/5.0 Test",
+                "jsVersion": "13.8",
+            },
+            {
+                "modelName": "",
+                "modelVersion": "",
+                "gpu": {
+                    "devices": [{"vendorString": "Google", "deviceString": "SwiftShader"}],
+                    "featureStatus": {"webgl": "enabled"},
+                },
+            },
+        ]
+
+        snapshot = collect_browser_runtime(driver, stage="login_page")
+
+        self.assertEqual(snapshot["stage"], "login_page")
+        self.assertEqual(snapshot["webdriver"]["browser_version"], "138.0.0.0")
+        self.assertEqual(snapshot["page"]["webgl"]["renderer"], "SwiftShader")
+        self.assertNotIn("secret", snapshot["current_url"])
+        self.assertNotIn("cookie", str(snapshot).lower())
+        self.assertNotIn("localstorage", str(snapshot).lower())
 
     @patch("sgcc_ha_bridge.browser._browser_service_stop")
     def test_browser_service_closes_chrome_on_release_by_default(self, stop):
