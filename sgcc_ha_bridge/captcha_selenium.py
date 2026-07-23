@@ -55,6 +55,28 @@ _WIDGET_SELECTORS = [
 ]
 
 
+def has_captcha_in_browser(driver: WebDriver) -> bool:
+    """Return whether a visible Tencent captcha widget is present."""
+    try:
+        return bool(driver.execute_script("""
+            const selectors = arguments[0];
+            const visible = (el) => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return rect.width > 40
+                    && rect.height > 40
+                    && style.display !== 'none'
+                    && style.visibility !== 'hidden'
+                    && Number(style.opacity || 1) > 0;
+            };
+            return selectors.some((selector) =>
+                Array.from(document.querySelectorAll(selector)).some(visible)
+            );
+        """, _WIDGET_SELECTORS))
+    except Exception:
+        return False
+
+
 # ═══════════════════════════════════════════════════════════
 # 主入口
 # ═══════════════════════════════════════════════════════════

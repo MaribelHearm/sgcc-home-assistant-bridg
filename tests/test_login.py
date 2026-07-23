@@ -81,21 +81,97 @@ class LoginFallbackTestCase(unittest.TestCase):
         login._username = "13800000000"
         login.config = SimpleNamespace(RETRY_WAIT_TIME_OFFSET_UNIT=0)
         login._click_button = Mock()
-        login._get_error_message = Mock(return_value="验证码错误")
+        login._type_text = Mock()
+        login._wait_for_login_submit_state = Mock(
+            return_value=("error", "验证码错误")
+        )
         interaction = Mock()
         build_interaction.return_value = interaction
         read_code.return_value = "123456"
 
-        with patch.object(SgccLogin, "is_logged_in_page", return_value=False):
-            with self.assertRaises(LoginFailure):
-                login._phone_code_login(driver, "RK001")
+        with self.assertRaises(LoginFailure):
+            login._phone_code_login(driver, "RK001")
 
         interaction.notify_result.assert_called_once_with(
             "phone-code",
             False,
-            "验证码提交后仍未检测到登录态",
+            "验证码错误",
         )
         self.assertNotIn("123456", str(interaction.mock_calls))
+
+    @patch("sgcc_ha_bridge.login.solve_captcha_in_browser", return_value=True)
+    @patch("sgcc_ha_bridge.login.build_login_interaction")
+    @patch("sgcc_ha_bridge.login.read_sms_code")
+    def test_phone_code_solves_secondary_captcha_before_success(
+        self,
+        read_code,
+        build_interaction,
+        solve_captcha,
+    ):
+        driver = Mock()
+        driver.find_elements.return_value = [Mock(), Mock(), Mock(), Mock()]
+        login = SgccLogin.__new__(SgccLogin)
+        login.driver = driver
+        login._username = "13800000000"
+        login.config = SimpleNamespace(
+            RETRY_WAIT_TIME_OFFSET_UNIT=0,
+            RETRY_TIMES_LIMIT=3,
+        )
+        login._click_button = Mock()
+        login._type_text = Mock()
+        login._wait_for_login_submit_state = Mock(
+            side_effect=[("captcha", None), ("authenticated", None)]
+        )
+        interaction = Mock()
+        build_interaction.return_value = interaction
+        read_code.return_value = "123456"
+
+        self.assertTrue(login._phone_code_login(driver, "RK001"))
+
+        solve_captcha.assert_called_once_with(driver, max_retries=3)
+        interaction.notify_result.assert_called_once_with(
+            "phone-code",
+            True,
+            "登录态已确认",
+        )
+
+    @patch("sgcc_ha_bridge.login.solve_captcha_in_browser", return_value=False)
+    @patch("sgcc_ha_bridge.login.build_login_interaction")
+    @patch("sgcc_ha_bridge.login.read_sms_code")
+    def test_phone_code_reports_secondary_captcha_failure(
+        self,
+        read_code,
+        build_interaction,
+        solve_captcha,
+    ):
+        driver = Mock()
+        driver.find_elements.return_value = [Mock(), Mock(), Mock(), Mock()]
+        login = SgccLogin.__new__(SgccLogin)
+        login.driver = driver
+        login._username = "13800000000"
+        login.config = SimpleNamespace(
+            RETRY_WAIT_TIME_OFFSET_UNIT=0,
+            RETRY_TIMES_LIMIT=2,
+            DRIVER_IMPLICITY_WAIT_TIME=0,
+        )
+        login._click_button = Mock()
+        login._type_text = Mock()
+        login._wait_for_login_submit_state = Mock(return_value=("captcha", None))
+        login._get_error_message = Mock(return_value=None)
+        interaction = Mock()
+        build_interaction.return_value = interaction
+        read_code.return_value = "123456"
+
+        with self.assertRaises(LoginFailure) as raised:
+            login._phone_code_login(driver, "RK001")
+
+        self.assertEqual(raised.exception.category, "captcha_failed")
+        solve_captcha.assert_called_once_with(driver, max_retries=2)
+        interaction.notify_result.assert_called_once_with(
+            "phone-code",
+            False,
+            "短信验证码提交后的腾讯人机验证未通过",
+        )
 
     @patch("sgcc_ha_bridge.login.build_login_interaction")
     @patch("sgcc_ha_bridge.login.WebDriverWait")

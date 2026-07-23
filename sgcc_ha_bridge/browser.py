@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -14,10 +15,10 @@ from .redact import redact_text
 def build_driver(config: FetcherConfig):
     chrome_options = webdriver.ChromeOptions()
 
-    browser_lang = os.getenv("BROWSER_LANGUAGE", "zh-HK,zh,en-US,en")
+    browser_lang = os.getenv("BROWSER_LANGUAGE", "zh-CN,zh,en-US,en")
     browser_ua = os.getenv("BROWSER_USER_AGENT", "")
     device_scale = os.getenv("BROWSER_DEVICE_SCALE_FACTOR", "2")
-    window_size = os.getenv("BROWSER_WINDOW_SIZE", "1158,848")
+    window_size = os.getenv("BROWSER_WINDOW_SIZE", "1280,900")
     profile_dir = os.getenv("SGCC_BROWSER_PROFILE", "/data/chrome-profile")
     browser_mode = _normalize_browser_mode(os.getenv("SGCC_BROWSER_MODE", "local"))
     browser_service_mode = browser_mode in {
@@ -110,27 +111,93 @@ def build_driver(config: FetcherConfig):
         logging.warning(f"设置脚本超时失败: {e}")
 
 
-    if not cdp_mode:
-        try:
-            driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-                "source": f"""
-                    Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
-                    Object.defineProperty(navigator, 'languages', {{get: () => {browser_lang.split(',')!r}}});
-                    Object.defineProperty(navigator, 'language', {{get: () => '{browser_lang.split(',')[0]}'}});
-                """
-            })
-            try:
-                driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {
-                    "timezoneId": os.getenv("BROWSER_TIMEZONE", "Asia/Shanghai")
-                })
-            except Exception as tz_error:
-                logging.warning(f"CDP 设置 timezone 失败: {tz_error}")
-        except Exception as e:
-            logging.warning(f"CDP 注入浏览器一致性脚本失败: {e}")
+    _apply_browser_consistency(driver, browser_lang)
 
     _setting_driver(driver)
+    _log_browser_runtime(driver)
 
     return driver
+
+
+def _apply_browser_consistency(driver, browser_lang: str) -> None:
+    languages = [item.strip() for item in browser_lang.split(",") if item.strip()]
+    primary_language = languages[0] if languages else "zh-CN"
+    script = f"""
+        (() => {{
+            const define = (target, key, value) => {{
+                try {{
+                    Object.defineProperty(target, key, {{
+                        get: () => value,
+                        configurable: true
+                    }});
+                }} catch (error) {{}}
+            }};
+            define(Navigator.prototype, 'webdriver', undefined);
+            define(Navigator.prototype, 'languages', {json.dumps(languages, ensure_ascii=False)});
+            define(Navigator.prototype, 'language', {json.dumps(primary_language, ensure_ascii=False)});
+            window.chrome = window.chrome || {{runtime: {{}}}};
+        }})();
+    """
+    try:
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {"source": script},
+        )
+    except Exception as error:
+        logging.warning(f"CDP 注入浏览器一致性脚本失败: {error}")
+
+    try:
+        driver.execute_script(script)
+    except Exception as error:
+        logging.warning(f"当前页面应用浏览器一致性脚本失败: {error}")
+
+    try:
+        driver.execute_cdp_cmd(
+            "Emulation.setTimezoneOverride",
+            {"timezoneId": os.getenv("BROWSER_TIMEZONE", "Asia/Shanghai")},
+        )
+    except Exception as error:
+        logging.warning(f"CDP 设置 timezone 失败: {error}")
+
+    try:
+        driver.execute_cdp_cmd(
+            "Emulation.setLocaleOverride",
+            {"locale": primary_language},
+        )
+    except Exception as error:
+        logging.warning(f"CDP 设置 locale 失败: {error}")
+
+
+def _log_browser_runtime(driver) -> None:
+    if os.getenv("SGCC_DEBUG", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return
+    try:
+        snapshot = driver.execute_script("""
+            return {
+                userAgent: navigator.userAgent,
+                webdriver: navigator.webdriver,
+                platform: navigator.platform,
+                language: navigator.language,
+                languages: navigator.languages,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                deviceMemory: navigator.deviceMemory || null,
+                screen: `${screen.width}x${screen.height}`,
+                viewport: `${window.innerWidth}x${window.innerHeight}`,
+                outerWindow: `${window.outerWidth}x${window.outerHeight}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                cdcKeys: Object.keys(window).filter((key) => key.startsWith('cdc_')).slice(0, 20)
+            };
+        """)
+        capabilities = getattr(driver, "capabilities", {}) or {}
+        chrome = capabilities.get("chrome") or {}
+        snapshot["browserVersion"] = capabilities.get("browserVersion")
+        snapshot["chromeDriverVersion"] = str(chrome.get("chromedriverVersion") or "").split(" ", 1)[0]
+        logging.info(
+            "浏览器运行态（不含凭证）: %s",
+            json.dumps(snapshot, ensure_ascii=False, sort_keys=True),
+        )
+    except Exception as error:
+        logging.warning(f"读取浏览器运行态失败: {error}")
 
 
 def _normalize_browser_mode(value: str) -> str:

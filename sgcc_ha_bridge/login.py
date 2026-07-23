@@ -5,12 +5,13 @@ import random
 import time
 from typing import Optional
 
+from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import TimeoutException
 
-from .captcha_selenium import solve_captcha_in_browser
+from .captcha_selenium import has_captcha_in_browser, solve_captcha_in_browser
 from .login_guard import LoginFailure, classify_login_failure, env_bool
 from .config import FetcherConfig
 from .const import LOGIN_URL, get_data_dir
@@ -85,7 +86,7 @@ class SgccLogin:
 
         element = WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME).until(
             EC.presence_of_element_located((By.CLASS_NAME, 'user')))
-        driver.execute_script("arguments[0].click();", element)
+        self._click_element(driver, element)
         logging.info("已找到 'user' 元素。\r")
         self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[1]/div[1]/div[2]/span')
         time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
@@ -99,9 +100,9 @@ class SgccLogin:
         elif self._password is not None and len(self._password) > 0:
             # 输入用户名和密码
             input_elements = driver.find_elements(By.CLASS_NAME, "el-input__inner")
-            input_elements[0].send_keys(self._username)
+            self._type_text(input_elements[0], self._username)
             logging.info(f"已输入用户名: {mask_secret(self._username)}\r")
-            input_elements[1].send_keys(self._password)
+            self._type_text(input_elements[1], self._password)
             logging.info("已输入密码: ***MASKED***\r")
 
             # 点击登录按钮
@@ -211,9 +212,37 @@ class SgccLogin:
         '''封装点击函数，仅在元素可点击时点击'''
         click_element = driver.find_element(button_search_type, button_search_key)
         WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME).until(EC.element_to_be_clickable(click_element))
-        driver.execute_script("arguments[0].click();", click_element)
-        # 点击后添加微小随机暂停，模拟人工操作
+        self._click_element(driver, click_element)
         time.sleep(random.uniform(0.1, 0.5))
+
+    @staticmethod
+    def _click_element(driver, element) -> None:
+        """Prefer a pointer action so the page receives a normal mouse event chain."""
+        try:
+            ActionChains(driver).move_to_element(element).pause(
+                random.uniform(0.08, 0.25)
+            ).click().perform()
+            return
+        except Exception as action_error:
+            logging.warning(f"原生鼠标点击失败，回退 WebElement.click(): {action_error}")
+        element.click()
+
+    @staticmethod
+    def _type_text(element, value: str) -> None:
+        """Type one character at a time instead of injecting a full value instantly."""
+        try:
+            min_delay = float(os.getenv("SGCC_TYPE_DELAY_MIN_SECONDS", "0.04"))
+        except (TypeError, ValueError):
+            min_delay = 0.04
+        try:
+            max_delay = float(os.getenv("SGCC_TYPE_DELAY_MAX_SECONDS", "0.12"))
+        except (TypeError, ValueError):
+            max_delay = 0.12
+        if max_delay < min_delay:
+            min_delay, max_delay = max_delay, min_delay
+        for character in value or "":
+            element.send_keys(character)
+            time.sleep(random.uniform(max(0.0, min_delay), max(0.0, max_delay)))
 
     def _get_error_message(self, driver, path) -> Optional[str]:
         """获取错误信息，如果不存在则返回 None"""
@@ -226,6 +255,35 @@ class SgccLogin:
             return None
         finally:
             driver.implicitly_wait(self.config.DRIVER_IMPLICITY_WAIT_TIME)  # 恢复隐式等待
+
+    def _wait_for_login_submit_state(self, driver, timeout: int = 15) -> tuple[str, Optional[str]]:
+        """Wait for one decisive result after submitting a login form."""
+
+        def observe(d):
+            if self.is_logged_in_page(d):
+                return ("authenticated", None)
+            if has_captcha_in_browser(d):
+                return ("captcha", None)
+            error = self._get_error_message(d, "//div[@class='errmsg-tip']//span")
+            if error:
+                return ("error", error)
+            return False
+
+        try:
+            result = WebDriverWait(driver, timeout).until(observe)
+            if result:
+                return result
+        except Exception:
+            pass
+
+        if self.is_logged_in_page(driver):
+            return ("authenticated", None)
+        if has_captcha_in_browser(driver):
+            return ("captcha", None)
+        error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
+        if error:
+            return ("error", error)
+        return ("unknown", None)
 
     def _fallback_login(self, driver, reason: str, methods: Optional[list[str]] = None) -> bool:
         """Try explicitly configured interactive login methods in order."""
@@ -276,7 +334,7 @@ class SgccLogin:
         if len(input_elements) < 4:
             raise LoginFailure("phone_code_page_failed", "短信验证码登录页面输入框不完整")
         input_elements[2].clear()
-        input_elements[2].send_keys(self._username)
+        self._type_text(input_elements[2], self._username)
         logging.info(f"已输入用户名: {mask_secret(self._username)}\r")
         self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[1]/div[2]/div[2]/div/a')
 
@@ -285,21 +343,50 @@ class SgccLogin:
         if not code:
             interaction.notify_result("phone-code", False, "未在有效时间内收到短信验证码")
             raise LoginFailure("phone_code_timeout", "未在有效时间内收到短信验证码")
-        input_elements[3].send_keys(code)
+        self._type_text(input_elements[3], code)
         code = None
         logging.info("已输入手机验证码。\r")
         self._click_button(driver, By.XPATH, '//*[@id="login_box"]/div[2]/div[2]/form/div[2]/div/button/span')
-        time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT * 2)
-        success = self.is_logged_in_page(driver)
+        state, error = self._wait_for_login_submit_state(driver)
+
+        if state == "captcha":
+            logging.info("短信验证码提交后出现腾讯人机验证，开始处理。")
+            captcha_passed = solve_captcha_in_browser(
+                driver,
+                max_retries=self.config.RETRY_TIMES_LIMIT,
+            )
+            if captcha_passed:
+                state, error = self._wait_for_login_submit_state(driver)
+            else:
+                error = (
+                    self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
+                    or "短信验证码提交后的腾讯人机验证未通过"
+                )
+                interaction.notify_result("phone-code", False, error)
+                raise LoginFailure(
+                    classify_login_failure(error, captcha_failed=True),
+                    error,
+                )
+
+        success = state == "authenticated"
         interaction.notify_result(
             "phone-code",
             success,
-            "登录态已确认" if success else "验证码提交后仍未检测到登录态",
+            "登录态已确认"
+            if success
+            else (
+                error
+                or "短信验证码及人机验证提交后仍未检测到登录态"
+            ),
         )
         if success:
             logging.info("短信验证码登录成功。")
             return True
-        error = self._get_error_message(driver, "//div[@class='errmsg-tip']//span") or "短信验证码提交后仍未登录"
+        error = (
+            error
+            or self._get_error_message(driver, "//div[@class='errmsg-tip']//span")
+            or "短信验证码及人机验证提交后仍未登录"
+        )
         raise LoginFailure(classify_login_failure(error), error)
 
     def _qr_login(self, driver, reason: str) -> bool:
@@ -307,7 +394,7 @@ class SgccLogin:
         # 切换验证码
         element = WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME).until(
             EC.presence_of_element_located((By.CLASS_NAME, 'qr_code')))
-        driver.execute_script("arguments[0].click();", element)
+        self._click_element(driver, element)
         logging.info("已切换到二维码模式")
 
         time.sleep(self.config.RETRY_WAIT_TIME_OFFSET_UNIT)
