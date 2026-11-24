@@ -262,6 +262,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `SGCC_BROWSER_CDP_INTERNAL_PORT` | 内置 CDP 代理启用时 Chrome 本体使用的内部 loopback 端口，需与 `SGCC_BROWSER_CDP_PORT` 不同，默认建议 `19223`。 |
 | `SGCC_BROWSER_SERVICE_PROFILE_HOST` | Compose sidecar Chrome profile 的宿主机挂载路径，默认 `/data/sgcc-browser-profile`；Add-on 不使用这个宿主机挂载变量。 |
 | `SGCC_BROWSER_SERVICE_PROFILE` | browser-service 容器内/ Add-on 内 Chrome profile 路径，默认 `/data/sgcc-browser-profile`。 |
+| `SGCC_CHROME_EXTRA_ARGS` | 可选；browser-service 启动 Chrome 时追加的额外参数，shlex 解析、空格分隔。无法出网或长期离线的环境建议 `--disable-metrics --metrics-recording-only`，防止 profile 的 `BrowserMetrics` 遥测目录无限膨胀占满磁盘。 |
 | `SGCC_BROWSER_PROFILE` | `local` 模式 Chromium 用户数据目录，默认建议放在 `/data/chrome-profile`。 |
 
 `example.env` 还包含少量抓取等待参数，可在网络慢、页面加载不稳定或硬件性能较弱时微调。

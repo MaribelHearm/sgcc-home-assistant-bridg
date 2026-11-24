@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import atexit
 import json
 import os
+import shlex
 import shutil
 import signal
 import select
@@ -33,6 +34,7 @@ BROWSER_LANGUAGE = os.getenv("BROWSER_LANGUAGE", "zh-CN,zh,en-US,en")
 BROWSER_LANGUAGE_PRIMARY = BROWSER_LANGUAGE.split(",", 1)[0].strip() or "zh-CN"
 WINDOW_SIZE = os.getenv("BROWSER_WINDOW_SIZE", "1280,900")
 START_TIMEOUT = float(os.getenv("SGCC_BROWSER_START_TIMEOUT", "60"))
+CHROME_EXTRA_ARGS = os.getenv("SGCC_CHROME_EXTRA_ARGS", "").strip()
 REVISION = os.getenv("VERSION", "").strip() or "unknown"
 
 _state_lock = threading.RLock()
@@ -139,6 +141,7 @@ def _chrome_args() -> list[str]:
         f"--lang={BROWSER_LANGUAGE_PRIMARY}",
         f"--accept-lang={BROWSER_LANGUAGE}",
         f"--window-size={WINDOW_SIZE}",
+        *(shlex.split(CHROME_EXTRA_ARGS) if CHROME_EXTRA_ARGS else []),
         START_URL,
     ]
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- browser-service 新增 `SGCC_CHROME_EXTRA_ARGS`，可为 Chrome 追加启动参数（shlex 解析）；无法出网或长期离线的环境建议配合 `--disable-metrics --metrics-recording-only`，避免 profile 下 `BrowserMetrics` 遥测目录无限膨胀占满磁盘。
+
 ## [v0.1.9] - 2026-08-08
 
 ### Fixed
